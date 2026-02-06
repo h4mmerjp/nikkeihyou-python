@@ -114,6 +114,7 @@ def parse_pdf(pdf_file):
             "total_amount": 0,
             "bushan_amount": 0,
             "kaigo_amount": 0,
+            "zenkai_sagaku": 0,
         }
 
         patterns = {
@@ -123,10 +124,11 @@ def parse_pdf(pdf_file):
             "hoken_nashi": r"保険なし\s+(\d+)\s+[\d,]+\s+([\d,]+)",
         }
         for key, pattern in patterns.items():
-            m = re.search(pattern, last_text)
-            if m:
-                summary[f"{key}_count"] = int(m.group(1))
-                summary[f"{key}_amount"] = int(m.group(2).replace(",", ""))
+            matches = re.findall(pattern, last_text)
+            if matches:
+                last_match = matches[-1]
+                summary[f"{key}_count"] = int(last_match[0])
+                summary[f"{key}_amount"] = int(last_match[1].replace(",", ""))
 
         # 合計
         total_m = re.search(r"合計\s+(\d+)\s+[\d,]+\s+([\d,]+)", last_text)
@@ -134,10 +136,20 @@ def parse_pdf(pdf_file):
             summary["total_count"] = int(total_m.group(1))
             summary["total_amount"] = int(total_m.group(2).replace(",", ""))
 
-        # 自費（全体合計行付近に「自費 金額」の形式で存在）
-        jihi_m = re.search(r"自費\s+([\d,]+)", last_text)
-        if jihi_m:
-            summary["jihi_amount"] = int(jihi_m.group(1).replace(",", ""))
+        # 自費・前回差額（全体合計行から位置ベースで抽出）
+        # 合計行: 人数 点数 負担額 介護単位 介護負担額 自費 物販 前回差額 領収額 差額
+        goukei_full_m = re.search(
+            r"合計\s+(\d+)\s+([\d,]+)\s+([\d,]+)\s+(\d+)\s+(\d+)\s+([\d,]+)\s+([\d,]+)\s+(-?[\d,]+)\s+([\d,]+)\s+(-?\d+)",
+            last_text,
+        )
+        if goukei_full_m:
+            summary["jihi_amount"] = int(goukei_full_m.group(6).replace(",", ""))
+            summary["zenkai_sagaku"] = int(goukei_full_m.group(8).replace(",", ""))
+        else:
+            # フォールバック: 「自費 金額」の形式が存在する場合
+            jihi_m = re.search(r"自費\s+([\d,]+)", last_text)
+            if jihi_m:
+                summary["jihi_amount"] = int(jihi_m.group(1).replace(",", ""))
 
         # 物販
         bushan_m = re.search(r"物販合計\s+([\d,]+)", last_text)
@@ -147,7 +159,7 @@ def parse_pdf(pdf_file):
         # 介護
         kaigo_m = re.search(r"介護.*?([\d,]+)", last_text)
         if kaigo_m:
-            summary["kaigo_amount"] = int(kaigo_m.group(1).replace(",", "")))
+            summary["kaigo_amount"] = int(kaigo_m.group(1).replace(",", ""))
 
         return summary
 
@@ -181,6 +193,7 @@ def save_to_notion(pdf_bytes, summary):
             "合計金額": {"number": summary["total_amount"]},
             "物販": {"number": summary["bushan_amount"]},
             "介護": {"number": summary["kaigo_amount"]},
+            "前回差額": {"number": summary["zenkai_sagaku"]},
             "照合状態": {"select": {"name": "未照合"}},
         },
     )
