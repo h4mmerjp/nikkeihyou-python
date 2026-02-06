@@ -1,0 +1,13 @@
+{
+  "name": "nikkeihyou-fin",
+  "version": "2.0.0",
+  "description": "日計表PDF解析 & 照合システム（Vercel + pdfplumber + Notion API）",
+  "private": true,
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
