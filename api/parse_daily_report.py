@@ -106,11 +106,13 @@ def parse_pdf(pdf_file):
             "kokuho_amount": 0,
             "kouki_count": 0,
             "kouki_amount": 0,
+            "jihi_count": 0,
+            "jihi_amount": 0,
             "hoken_nashi_count": 0,
             "hoken_nashi_amount": 0,
             "total_count": 0,
             "total_amount": 0,
-            "buppan_amount": 0,
+            "bushan_amount": 0,
             "kaigo_amount": 0,
         }
 
@@ -132,15 +134,20 @@ def parse_pdf(pdf_file):
             summary["total_count"] = int(total_m.group(1))
             summary["total_amount"] = int(total_m.group(2).replace(",", ""))
 
+        # 自費（全体合計行付近に「自費 金額」の形式で存在）
+        jihi_m = re.search(r"自費\s+([\d,]+)", last_text)
+        if jihi_m:
+            summary["jihi_amount"] = int(jihi_m.group(1).replace(",", ""))
+
         # 物販
-        buppan_m = re.search(r"物販合計\s+([\d,]+)", last_text)
-        if buppan_m:
-            summary["buppan_amount"] = int(buppan_m.group(1).replace(",", ""))
+        bushan_m = re.search(r"物販合計\s+([\d,]+)", last_text)
+        if bushan_m:
+            summary["bushan_amount"] = int(bushan_m.group(1).replace(",", ""))
 
         # 介護
         kaigo_m = re.search(r"介護.*?([\d,]+)", last_text)
         if kaigo_m:
-            summary["kaigo_amount"] = int(kaigo_m.group(1).replace(",", ""))
+            summary["kaigo_amount"] = int(kaigo_m.group(1).replace(",", "")))
 
         return summary
 
@@ -166,11 +173,13 @@ def save_to_notion(pdf_bytes, summary):
             "国保金額": {"number": summary["kokuho_amount"]},
             "後期人数": {"number": summary["kouki_count"]},
             "後期金額": {"number": summary["kouki_amount"]},
+            "自費人数": {"number": summary["jihi_count"]},
+            "自費金額": {"number": summary["jihi_amount"]},
             "保険なし人数": {"number": summary["hoken_nashi_count"]},
             "保険なし金額": {"number": summary["hoken_nashi_amount"]},
             "合計人数": {"number": summary["total_count"]},
             "合計金額": {"number": summary["total_amount"]},
-            "物販": {"number": summary["buppan_amount"]},
+            "物販": {"number": summary["bushan_amount"]},
             "介護": {"number": summary["kaigo_amount"]},
             "照合状態": {"select": {"name": "未照合"}},
         },

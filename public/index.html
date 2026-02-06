@@ -1,467 +1,1730 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>日計表 照合システム</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', 'Hiragino Sans', sans-serif; background: #f5f5f5; color: #333; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>歯科医院 日計表入力</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        @media print {
+            @page {
+                size: B5 landscape;
+                margin: 0.3cm;
+            }
+            .no-print { display: none !important; }
+            .print-block { display: block !important; }
+            body {
+                margin: 0 !important;
+                padding: 0 !important;
+                background: white !important;
+                font-size: 10px !important;
+                width: 100% !important;
+                height: 100% !important;
+                overflow: visible !important;
+                font-family: 'MS Gothic', monospace !important;
+            }
+            input, button {
+                border: none !important;
+                background: none !important;
+                color: black !important;
+                -webkit-appearance: none !important;
+                appearance: none !important;
+                font-size: 9px !important;
+                font-family: 'MS Gothic', monospace !important;
+                font-weight: bold !important;
+            }
+            .print-container {
+                max-width: 100% !important;
+                width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                font-size: 10px !important;
+                border: 2px solid black !important;
+                box-sizing: border-box !important;
+                overflow: hidden !important;
+                height: 100vh !important;
+                display: flex !important;
+                flex-direction: column !important;
+            }
+            table {
+                font-size: 9px !important;
+                page-break-inside: avoid !important;
+                width: 100% !important;
+                table-layout: fixed !important;
+                border-collapse: collapse !important;
+                margin-bottom: 8px !important;
+            }
+            th, td {
+                padding: 2px 1px !important;
+                font-size: 9px !important;
+                line-height: 1.1 !important;
+                word-wrap: break-word !important;
+                overflow: hidden !important;
+                border: 1px solid black !important;
+                text-align: center !important;
+                font-family: 'MS Gothic', monospace !important;
+            }
+            .grid {
+                display: grid !important;
+                grid-template-columns: 40% 60% !important;
+                gap: 8px !important;
+                width: 100% !important;
+                height: auto !important;
+                flex: 1 !important;
+            }
+            .print-header {
+                font-size: 12px !important;
+                padding: 3px !important;
+                line-height: 1.2 !important;
+                text-align: center !important;
+                font-weight: bold !important;
+                border-bottom: 2px solid black !important;
+                margin-bottom: 3px !important;
+            }
+            .print-date {
+                font-size: 9px !important;
+                padding: 2px !important;
+                line-height: 1.1 !important;
+                text-align: center !important;
+                border-bottom: 1px solid black !important;
+                margin-bottom: 5px !important;
+            }
+            .print-input-s { width: 25px !important; font-size: 8px !important; text-align: right !important; }
+            .print-input-m { width: 35px !important; font-size: 8px !important; text-align: right !important; }
+            .print-input-l { width: 50px !important; font-size: 8px !important; text-align: right !important; }
+            .print-input-center { text-align: center !important; }
 
-    .container { max-width: 960px; margin: 0 auto; padding: 20px; }
-    h1 { text-align: center; margin-bottom: 20px; font-size: 1.4rem; }
+            .left-section, .right-section {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
 
-    /* --- カード --- */
-    .card {
-      background: #fff; border-radius: 8px; padding: 20px;
-      margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-    .card h2 { font-size: 1rem; margin-bottom: 12px; color: #555; }
+            .spacer {
+                display: none !important;
+            }
 
-    /* --- ファイルアップロード --- */
-    .upload-area {
-      border: 2px dashed #ccc; border-radius: 8px; padding: 24px;
-      text-align: center; cursor: pointer; transition: border-color 0.2s;
-    }
-    .upload-area:hover { border-color: #4a90d9; }
-    .upload-area.dragover { border-color: #4a90d9; background: #eef4fb; }
-    #fileInput { display: none; }
-    #uploadBtn {
-      margin-top: 12px; padding: 10px 24px; background: #4a90d9; color: #fff;
-      border: none; border-radius: 6px; cursor: pointer; font-size: 0.95rem;
-    }
-    #uploadBtn:disabled { background: #aaa; cursor: not-allowed; }
-    .file-status { margin-top: 8px; font-size: 0.85rem; }
-    .file-status.success { color: #2e7d32; }
-    .file-status.error { color: #c62828; }
-    .file-status.loading { color: #f57c00; }
+            .total-row {
+                background-color: #e8e8e8 !important;
+                font-weight: bold !important;
+            }
 
-    /* --- データテーブル --- */
-    .data-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-    .data-table th, .data-table td {
-      border: 1px solid #ddd; padding: 8px 12px; text-align: right;
-    }
-    .data-table th { background: #f0f0f0; text-align: center; font-weight: 600; }
-    .data-table .label { text-align: left; font-weight: 600; }
+            .data-row {
+                background-color: #f8f8f8 !important;
+            }
 
-    /* --- 現金種入力 --- */
-    .cash-grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px;
-      margin-bottom: 16px;
-    }
-    .cash-grid label { font-size: 0.85rem; color: #666; }
-    .cash-grid input {
-      width: 100%; padding: 8px; border: 1px solid #ccc;
-      border-radius: 4px; font-size: 1rem; text-align: right;
-    }
+            th {
+                background-color: #d0d0d0 !important;
+                font-weight: bold !important;
+            }
 
-    /* --- 照合結果 --- */
-    .result-box {
-      padding: 16px; border-radius: 8px; text-align: center;
-      font-size: 1.2rem; font-weight: 700; margin-top: 12px;
-    }
-    .result-box.match { background: #e8f5e9; color: #2e7d32; }
-    .result-box.mismatch { background: #ffebee; color: #c62828; }
-    .result-box.pending { background: #f5f5f5; color: #999; }
+            .compact-table {
+                margin-bottom: 4px !important;
+            }
 
-    /* --- ボタン --- */
-    .btn-row { display: flex; gap: 12px; margin-top: 16px; justify-content: center; }
-    .btn {
-      padding: 10px 24px; border: none; border-radius: 6px;
-      cursor: pointer; font-size: 0.95rem;
-    }
-    .btn-primary { background: #4a90d9; color: #fff; }
-    .btn-success { background: #43a047; color: #fff; }
-    .btn-secondary { background: #757575; color: #fff; }
+            .col-item { width: 30% !important; }
+            .col-count { width: 25% !important; }
+            .col-amount { width: 45% !important; }
+            .col-subject { width: 20% !important; }
+            .col-dest { width: 25% !important; }
+            .col-note { width: 25% !important; }
+            .col-value { width: 30% !important; }
 
-    /* --- メッセージ --- */
-    #message {
-      position: fixed; top: 16px; right: 16px; padding: 12px 20px;
-      background: #333; color: #fff; border-radius: 6px;
-      font-size: 0.9rem; display: none; z-index: 1000;
-    }
+            .difference-controls {
+                display: none !important;
+            }
 
-    /* --- 印刷 --- */
-    @media print {
-      body { background: #fff; }
-      .no-print { display: none !important; }
-      .container { max-width: 100%; padding: 0; }
-      .card { box-shadow: none; break-inside: avoid; }
-    }
-  </style>
+            .difference-btn-single {
+                display: none !important;
+            }
+
+            .balance-check {
+                background-color: #ffffcc !important;
+                border: 2px solid #ff0000 !important;
+                font-weight: bold !important;
+            }
+
+            .balance-check.match {
+                background-color: #ccffcc !important;
+                border-color: #00aa00 !important;
+            }
+
+            .print-sign {
+                display: inline !important;
+                font-weight: bold !important;
+                font-size: 9px !important;
+                margin: 0 2px !important;
+            }
+        }
+
+        body {
+            font-family: 'MS Gothic', monospace, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+        }
+
+        .app-container {
+            font-family: 'MS Gothic', monospace, sans-serif;
+            font-size: 12px;
+            background-color: white;
+            border: 2px solid black;
+            max-width: 1200px;
+            margin: 10px auto;
+            padding: 0 8px;
+        }
+
+        .header {
+            background-color: #e0e0e0;
+            padding: 15px;
+            text-align: center;
+            font-weight: bold;
+            border-bottom: 2px solid black;
+            font-size: 16px;
+        }
+
+        .print-date-section {
+            display: none;
+            text-align: center;
+            padding: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            border-bottom: 1px solid black;
+        }
+
+        .date-input-section {
+            text-align: center;
+            margin: 10px 0;
+            font-size: 14px;
+            padding: 0 8px;
+        }
+
+        .date-input {
+            font-size: 14px;
+            padding: 5px;
+            border: 1px solid black;
+            font-family: monospace;
+        }
+
+        .today-btn {
+            margin-left: 10px;
+            padding: 3px 8px;
+            font-size: 12px;
+            border: 1px solid black;
+            background-color: #f0f0f0;
+            cursor: pointer;
+        }
+
+        .today-btn:hover {
+            background-color: #d0d0d0;
+        }
+
+        .date-display {
+            margin-left: 10px;
+        }
+
+        .pdf-upload-section {
+            background-color: #f8f8f8;
+            border: 2px solid #007bff;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            text-align: center;
+        }
+
+        .pdf-upload-section h3 {
+            color: #007bff;
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 10px;
+        }
+
+        .file-input {
+            position: absolute;
+            left: -9999px;
+            opacity: 0;
+        }
+
+        .file-input-label {
+            display: inline-block;
+            padding: 8px 20px;
+            background-color: #007bff;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+
+        .file-input-label:hover {
+            background-color: #0056b3;
+        }
+
+        .upload-btn {
+            padding: 8px 20px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+
+        .upload-btn:hover {
+            background-color: #218838;
+        }
+
+        .upload-btn:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+
+        .file-status {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .loading {
+            color: #007bff;
+            font-weight: bold;
+        }
+
+        .success {
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        .error {
+            color: #dc3545;
+            font-weight: bold;
+        }
+
+        .debug-section {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .debug-section h4 {
+            margin-top: 0;
+            color: #495057;
+        }
+
+        .debug-content {
+            background-color: white;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            padding: 10px;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .debug-clear-btn {
+            margin-top: 10px;
+            padding: 5px 10px;
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .debug-clear-btn:hover {
+            background-color: #5a6268;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0;
+            min-height: 600px;
+        }
+
+        .left-section {
+            border-right: 2px solid black;
+            padding-right: 8px;
+        }
+
+        .right-section {
+            padding-left: 8px;
+        }
+
+        .spacer {
+            height: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+            table-layout: fixed;
+            margin-bottom: 15px;
+        }
+
+        th, td {
+            border: 1px solid black;
+            padding: 4px;
+            text-align: center;
+        }
+
+        th {
+            background-color: #c0c0c0;
+            font-weight: bold;
+        }
+
+        .data-row {
+            background-color: #f8f8f8;
+        }
+
+        .total-row {
+            background-color: #e0e0e0;
+            font-weight: bold;
+        }
+
+        .input-field {
+            border: none;
+            background: transparent;
+            font-family: 'MS Gothic', monospace, sans-serif;
+            font-size: 11px;
+            text-align: right;
+            width: 100%;
+        }
+
+        .input-field-center {
+            text-align: center;
+        }
+
+        .overflow-hidden {
+            overflow: hidden;
+        }
+
+        .truncate {
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .buttons-section {
+            text-align: center;
+            margin: 15px;
+            padding: 15px;
+            border-top: 2px solid black;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            margin: 5px;
+            font-size: 14px;
+            border: 2px solid black;
+            cursor: pointer;
+            font-family: monospace;
+        }
+
+        .btn-clear {
+            background-color: #ffcccc;
+        }
+
+        .btn-clear:hover {
+            background-color: #ffaaaa;
+        }
+
+        .btn-print {
+            background-color: #ccccff;
+        }
+
+        .btn-print:hover {
+            background-color: #aaaaff;
+        }
+
+        .btn-export {
+            background-color: #cccccc;
+        }
+
+        .btn-export:hover {
+            background-color: #aaaaaa;
+        }
+
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background-color: white;
+            border: 2px solid black;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .modal-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .btn-yes {
+            padding: 8px 16px;
+            background-color: #ff5555;
+            color: white;
+            border: 1px solid black;
+            cursor: pointer;
+        }
+
+        .btn-yes:hover {
+            background-color: #ff3333;
+        }
+
+        .btn-no {
+            padding: 8px 16px;
+            background-color: #d0d0d0;
+            border: 1px solid black;
+            cursor: pointer;
+        }
+
+        .btn-no:hover {
+            background-color: #b0b0b0;
+        }
+
+        .message {
+            position: fixed;
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            z-index: 1001;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .difference-controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+
+        .difference-btn-single {
+            background-color: #e0e0e0;
+            border: 1px solid black;
+            padding: 2px 8px;
+            font-size: 12px;
+            cursor: pointer;
+            min-width: 30px;
+            font-weight: bold;
+        }
+
+        .difference-btn-single.positive {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .difference-btn-single.negative {
+            background-color: #f44336;
+            color: white;
+        }
+
+        .difference-btn-single:hover {
+            opacity: 0.8;
+        }
+
+        .balance-check {
+            background-color: #ffffcc;
+            border: 2px solid #ff0000;
+            font-weight: bold;
+            padding: 8px;
+            text-align: center;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+
+        .balance-check.match {
+            background-color: #ccffcc;
+            border-color: #00aa00;
+        }
+
+        .print-sign {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .left-section {
+                border-right: none;
+                border-bottom: 2px solid black;
+                margin-bottom: 20px;
+                padding-right: 0;
+            }
+
+            .right-section {
+                padding-left: 0;
+            }
+
+            .spacer {
+                display: none;
+            }
+
+            .app-container {
+                margin: 5px;
+                padding: 0 4px;
+            }
+
+            table {
+                font-size: 10px;
+            }
+
+            .input-field {
+                font-size: 10px;
+            }
+        }
+    </style>
 </head>
 <body>
+    <div class="app-container print-container" id="verification-page">
+        <!-- ヘッダー -->
+        <div class="header print-header">
+            歯科医院 日計表入力
+        </div>
 
-<div id="message"></div>
+        <!-- 印刷用日付表示 -->
+        <div class="print-date-section print-block print-date" id="printDate">
+            日付: <span id="printDateValue"></span> <span id="printDateDisplay"></span>
+        </div>
 
-<div class="container" id="verification-page">
-  <h1>日計表 照合システム</h1>
+        <!-- 日付入力 -->
+        <div class="date-input-section no-print">
+            <label>日付: </label>
+            <input type="date" id="reportDate" class="date-input">
+            <button class="today-btn" onclick="setToday()">今日</button>
+            <span class="date-display" id="dateDisplay"></span>
+        </div>
 
-  <!-- ファイルアップロード -->
-  <div class="card no-print">
-    <h2>日計表PDFアップロード</h2>
-    <div class="upload-area" id="dropZone" onclick="document.getElementById('fileInput').click()">
-      <p>クリックまたはドラッグ&ドロップでPDFを選択</p>
-      <input type="file" id="fileInput" accept=".pdf">
+        <!-- PDFアップロード機能 -->
+        <div class="pdf-upload-section no-print">
+            <h3>日計表PDFから自動入力</h3>
+            <div class="file-input-wrapper">
+                <input type="file" id="pdfFile" class="file-input" accept=".pdf" onchange="handleFileSelect()">
+                <label for="pdfFile" class="file-input-label">PDFファイルを選択</label>
+            </div>
+            <button class="upload-btn" id="uploadBtn" onclick="uploadPDF()" disabled>アップロード & 自動入力</button>
+            <div class="file-status" id="fileStatus">PDFファイルを選択してください</div>
+        </div>
+
+        <!-- デバッグ情報エリア -->
+        <div class="debug-section no-print">
+            <h4>デバッグ情報</h4>
+            <div class="debug-content" id="debugContent">デバッグ情報がここに表示されます...</div>
+            <button class="debug-clear-btn" onclick="clearDebugInfo()">クリア</button>
+        </div>
+
+        <!-- 残高チェック表示 -->
+        <div class="balance-check no-print" id="balanceCheck">
+            残高チェック: 計算中...
+        </div>
+
+        <!-- 確認ダイアログ -->
+        <div class="modal hidden no-print" id="confirmModal">
+            <div class="modal-content">
+                <p style="text-align: center; margin-bottom: 15px; font-family: monospace;">全てのデータをクリアしますか？</p>
+                <div class="modal-buttons">
+                    <button class="btn-yes" onclick="confirmClear()">はい</button>
+                    <button class="btn-no" onclick="cancelClear()">いいえ</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- メッセージ表示 -->
+        <div class="message hidden no-print" id="messageBox"></div>
+
+        <!-- メインレイアウト -->
+        <div class="grid">
+            <!-- 左側：ストックと金種 -->
+            <div class="left-section">
+                <div class="spacer"></div>
+
+                <!-- ストック -->
+                <table class="compact-table">
+                    <thead>
+                        <tr>
+                            <th colspan="3">ストック</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="data-row">
+                            <td class="col-item">5百円</td>
+                            <td class="col-count"><input type="number" class="input-field print-input-s" id="stock500" oninput="updateCalculations()">枚</td>
+                            <td class="col-amount"><span id="stock500Total">0</span></td>
+                        </tr>
+                        <tr class="data-row">
+                            <td class="col-item">100円</td>
+                            <td class="col-count"><input type="number" class="input-field print-input-s" id="stock100" oninput="updateCalculations()">枚</td>
+                            <td class="col-amount"><span id="stock100Total">0</span></td>
+                        </tr>
+                        <tr class="data-row">
+                            <td class="col-item">50円</td>
+                            <td class="col-count"><input type="number" class="input-field print-input-s" id="stock50" oninput="updateCalculations()">枚</td>
+                            <td class="col-amount"><span id="stock50Total">0</span></td>
+                        </tr>
+                        <tr class="data-row">
+                            <td class="col-item">10円</td>
+                            <td class="col-count"><input type="number" class="input-field print-input-s" id="stock10" oninput="updateCalculations()">枚</td>
+                            <td class="col-amount"><span id="stock10Total">0</span></td>
+                        </tr>
+                        <tr class="data-row">
+                            <td class="col-item">5円</td>
+                            <td class="col-count"><input type="number" class="input-field print-input-s" id="stock5" oninput="updateCalculations()">枚</td>
+                            <td class="col-amount"><span id="stock5Total">0</span></td>
+                        </tr>
+                        <tr class="data-row">
+                            <td class="col-item">1円</td>
+                            <td class="col-count"><input type="number" class="input-field print-input-s" id="stock1" oninput="updateCalculations()">枚</td>
+                            <td class="col-amount"><span id="stock1Total">0</span></td>
+                        </tr>
+                        <tr class="total-row">
+                            <td class="col-item">ストック合計</td>
+                            <td class="col-count"></td>
+                            <td class="col-amount"><span id="stockGrandTotal">0</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <!-- 本日の残高金種 -->
+                <table class="compact-table">
+                    <thead>
+                        <tr>
+                            <th colspan="3">本日の残高金種</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="data-row">
+                            <td class="col-item">1万円</td>
+                            <td class="col-count"><input type="number" class="input-field print-input-s" id="bill10000" oninput="updateCalculations()">枚</td>
+                            <td class="col-amount"><span id="bill10000Total">0</span></td>
+                        </tr>
+                        <tr class="data-row">
+                            <td class="col-item">5千円</td>
+                            <td class="col-count"><input type="number" class="input-field print-input-s" id="bill5000" oninput="updateCalculations()">枚</td>
+                            <td class="col-amount"><span id="bill5000Total">0</span></td>
+                        </tr>
+                        <tr class="data-row">
+                            <td class="col-item">2千円</td>
+                            <td class="col-count"><input type="number" class="input-field print-input-s" id="bill2000" oninput="updateCalculations()">枚</td>
+                            <td class="col-amount"><span id="bill2000Total">0</span></td>
+                        </tr>
+                        <tr class="data-row">
+                            <td class="col-item">千円</td>
+                            <td class="col-count"><input type="number" class="input-field print-input-s" id="bill1000" oninput="updateCalculations()">枚</td>
+                            <td class="col-amount"><span id="bill1000Total">0</span></td>
+                        </tr>
+                        <tr class="data-row">
+                            <td class="col-item">5百円</td>
+                            <td class="col-count"><input type="number" class="input-field print-input-s" id="coin500" oninput="updateCalculations()">枚</td>
+                            <td class="col-amount"><span id="coin500Total">0</span></td>
+                        </tr>
+                        <tr class="data-row">
+                            <td class="col-item">100円</td>
+                            <td class="col-count"><input type="number" class="input-field print-input-s" id="coin100" oninput="updateCalculations()">枚</td>
+                            <td class="col-amount"><span id="coin100Total">0</span></td>
+                        </tr>
+                        <tr class="data-row">
+                            <td class="col-item">50円</td>
+                            <td class="col-count"><input type="number" class="input-field print-input-s" id="coin50" oninput="updateCalculations()">枚</td>
+                            <td class="col-amount"><span id="coin50Total">0</span></td>
+                        </tr>
+                        <tr class="data-row">
+                            <td class="col-item">10円</td>
+                            <td class="col-count"><input type="number" class="input-field print-input-s" id="coin10" oninput="updateCalculations()">枚</td>
+                            <td class="col-amount"><span id="coin10Total">0</span></td>
+                        </tr>
+                        <tr class="data-row">
+                            <td class="col-item">5円</td>
+                            <td class="col-count"><input type="number" class="input-field print-input-s" id="coin5" oninput="updateCalculations()">枚</td>
+                            <td class="col-amount"><span id="coin5Total">0</span></td>
+                        </tr>
+                        <tr class="data-row">
+                            <td class="col-item">1円</td>
+                            <td class="col-count"><input type="number" class="input-field print-input-s" id="coin1" oninput="updateCalculations()">枚</td>
+                            <td class="col-amount"><span id="coin1Total">0</span></td>
+                        </tr>
+                        <tr class="total-row">
+                            <td class="col-item">金種合計</td>
+                            <td class="col-count"></td>
+                            <td class="col-amount"><span id="currencyTotal">0</span></td>
+                        </tr>
+                        <tr class="total-row">
+                            <td class="col-item">総残高</td>
+                            <td class="col-count"></td>
+                            <td class="col-amount"><span id="totalBalance">0</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 右側：窓口現金入出金 -->
+            <div class="right-section">
+                <!-- 窓口現金入金の記録 -->
+                <table class="compact-table">
+                    <thead>
+                        <tr>
+                            <th colspan="4">窓口現金入金の記録</th>
+                        </tr>
+                        <tr>
+                            <th class="col-subject">科目</th>
+                            <th class="col-dest">入金先</th>
+                            <th class="col-note">摘要</th>
+                            <th class="col-value">入金額</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>前回差額</td>
+                            <td>繰越</td>
+                            <td>
+                                <div class="difference-controls">
+                                    <button type="button" class="difference-btn-single" id="previousSignBtn" onclick="togglePreviousDifferenceSign()">+</button>
+                                </div>
+                                <span class="print-sign" id="previousPrintSign">+</span>
+                            </td>
+                            <td><input type="number" class="input-field print-input-m" id="previousDifference" oninput="updateCalculations()"></td>
+                        </tr>
+                        <tr>
+                            <td>当日差額</td>
+                            <td>調整</td>
+                            <td>
+                                <div class="difference-controls">
+                                    <button type="button" class="difference-btn-single" id="todaySignBtn" onclick="toggleTodayDifferenceSign()">+</button>
+                                </div>
+                                <span class="print-sign" id="todayPrintSign">+</span>
+                            </td>
+                            <td><input type="number" class="input-field print-input-m" id="todayDifference" oninput="updateCalculations()"></td>
+                        </tr>
+                        <tr>
+                            <td>社保</td>
+                            <td>窓口収入合計</td>
+                            <td><input type="number" class="input-field print-input-s" id="shahoCount" oninput="updateCalculations()">名</td>
+                            <td><input type="number" class="input-field print-input-m" id="shahoIncome" oninput="updateCalculations()"></td>
+                        </tr>
+                        <tr>
+                            <td>国保</td>
+                            <td>窓口収入合計</td>
+                            <td><input type="number" class="input-field print-input-s" id="kokuhoCount" oninput="updateCalculations()">名</td>
+                            <td><input type="number" class="input-field print-input-m" id="kokuhoIncome" oninput="updateCalculations()"></td>
+                        </tr>
+                        <tr>
+                            <td>後期高齢者</td>
+                            <td>窓口収入合計</td>
+                            <td><input type="number" class="input-field print-input-s" id="koukiCount" oninput="updateCalculations()">名</td>
+                            <td><input type="number" class="input-field print-input-m" id="koukiIncome" oninput="updateCalculations()"></td>
+                        </tr>
+                        <tr>
+                            <td>自費</td>
+                            <td>窓口収入合計</td>
+                            <td><input type="number" class="input-field print-input-s" id="jihiCount" oninput="updateCalculations()">名</td>
+                            <td><input type="number" class="input-field print-input-m" id="jihiIncome" oninput="updateCalculations()"></td>
+                        </tr>
+                        <tr>
+                            <td>保険なし</td>
+                            <td>窓口収入合計</td>
+                            <td><input type="number" class="input-field print-input-s" id="hokenNashiCount" oninput="updateCalculations()">名</td>
+                            <td><input type="number" class="input-field print-input-m" id="hokenNashiIncome" oninput="updateCalculations()"></td>
+                        </tr>
+                        <tr>
+                            <td>物販収入</td>
+                            <td>窓口収入合計</td>
+                            <td><input type="text" class="input-field input-field-center print-input-center" id="bushanNote"></td>
+                            <td><input type="number" class="input-field print-input-m" id="bushanIncome" oninput="updateCalculations()"></td>
+                        </tr>
+                        <tr>
+                            <td><input type="text" class="input-field input-field-center print-input-center" id="extraIncome1Subject"></td>
+                            <td><input type="text" class="input-field input-field-center print-input-center" id="extraIncome1Destination"></td>
+                            <td><input type="text" class="input-field input-field-center print-input-center" id="extraIncome1Note"></td>
+                            <td><input type="number" class="input-field print-input-m" id="extraIncome1Amount" oninput="updateCalculations()"></td>
+                        </tr>
+                        <tr>
+                            <td><input type="text" class="input-field input-field-center print-input-center" id="extraIncome2Subject"></td>
+                            <td><input type="text" class="input-field input-field-center print-input-center" id="extraIncome2Destination"></td>
+                            <td><input type="text" class="input-field input-field-center print-input-center" id="extraIncome2Note"></td>
+                            <td><input type="number" class="input-field print-input-m" id="extraIncome2Amount" oninput="updateCalculations()"></td>
+                        </tr>
+                        <tr class="total-row">
+                            <td colspan="3">合計</td>
+                            <td><span id="incomeTotal">0</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <!-- 窓口現金出金の記録 -->
+                <table class="compact-table">
+                    <thead>
+                        <tr>
+                            <th colspan="4">窓口現金出金の記録</th>
+                        </tr>
+                        <tr>
+                            <th class="col-subject">科目</th>
+                            <th class="col-dest">出金先</th>
+                            <th class="col-note">摘要</th>
+                            <th class="col-value">出金額</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><input type="text" class="input-field input-field-center print-input-center" id="expense1Subject"></td>
+                            <td><input type="text" class="input-field input-field-center print-input-center" id="expense1Destination"></td>
+                            <td><input type="text" class="input-field input-field-center print-input-center" id="expense1Note"></td>
+                            <td><input type="number" class="input-field print-input-m" id="expense1" oninput="updateCalculations()"></td>
+                        </tr>
+                        <tr>
+                            <td><input type="text" class="input-field input-field-center print-input-center" id="expense2Subject"></td>
+                            <td><input type="text" class="input-field input-field-center print-input-center" id="expense2Destination"></td>
+                            <td><input type="text" class="input-field input-field-center print-input-center" id="expense2Note"></td>
+                            <td><input type="number" class="input-field print-input-m" id="expense2" oninput="updateCalculations()"></td>
+                        </tr>
+                        <tr>
+                            <td><input type="text" class="input-field input-field-center print-input-center" id="expense3Subject"></td>
+                            <td><input type="text" class="input-field input-field-center print-input-center" id="expense3Destination"></td>
+                            <td><input type="text" class="input-field input-field-center print-input-center" id="expense3Note"></td>
+                            <td><input type="number" class="input-field print-input-m" id="expense3" oninput="updateCalculations()"></td>
+                        </tr>
+                        <tr>
+                            <td></td>
+                            <td></td>
+                            <td>院長へ</td>
+                            <td><input type="number" class="input-field print-input-m" id="expenseDirector" oninput="updateCalculations()"></td>
+                        </tr>
+                        <tr class="total-row">
+                            <td colspan="3">合計</td>
+                            <td><span id="expenseTotal">0</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <!-- 窓口現金出納 -->
+                <table class="compact-table">
+                    <thead>
+                        <tr>
+                            <th colspan="2">窓口現金出納</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>前日の繰越</td>
+                            <td><input type="number" class="input-field print-input-l" id="previousBalance" oninput="updateCalculations()"></td>
+                        </tr>
+                        <tr>
+                            <td>本日の現金入金</td>
+                            <td><span id="todayIncome">0</span></td>
+                        </tr>
+                        <tr>
+                            <td>本日の現金出金</td>
+                            <td><span id="todayExpense">0</span></td>
+                        </tr>
+                        <tr class="total-row">
+                            <td>本日の残高</td>
+                            <td><span id="finalBalance">0</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ボタンセクション -->
+        <div class="buttons-section no-print">
+            <button class="btn btn-clear" onclick="clearAll()">全クリア</button>
+            <button class="btn btn-print" onclick="printReport()">印刷 & Notion保存</button>
+            <button class="btn btn-export" onclick="exportData()">データエクスポート</button>
+        </div>
     </div>
-    <div style="text-align:center">
-      <button id="uploadBtn" disabled>アップロード & 自動入力</button>
-    </div>
-    <div class="file-status" id="fileStatus"></div>
-  </div>
 
-  <!-- 抽出データ -->
-  <div class="card">
-    <h2>抽出データ</h2>
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>区分</th>
-          <th>人数</th>
-          <th>金額（円）</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr><td class="label">社保</td><td id="shahoCount">-</td><td id="shahoAmount">-</td></tr>
-        <tr><td class="label">国保</td><td id="kokuhoCount">-</td><td id="kokuhoAmount">-</td></tr>
-        <tr><td class="label">後期</td><td id="koukiCount">-</td><td id="koukiAmount">-</td></tr>
-        <tr><td class="label">保険なし</td><td id="hokenNashiCount">-</td><td id="hokenNashiAmount">-</td></tr>
-        <tr style="font-weight:700;background:#fafafa">
-          <td class="label">合計</td><td id="totalCount">-</td><td id="totalAmount">-</td>
-        </tr>
-        <tr><td class="label">物販</td><td>-</td><td id="buppanAmount">-</td></tr>
-        <tr><td class="label">介護</td><td>-</td><td id="kaigoAmount">-</td></tr>
-      </tbody>
-    </table>
-    <p style="margin-top:8px;font-size:0.8rem;color:#999">日付: <span id="reportDate">-</span></p>
-  </div>
+    <script>
+        let previousDifferenceSign = '+';
+        let todayDifferenceSign = '+';
+        let selectedFile = null;
+        window.notionPageId = null;
 
-  <!-- 現金種入力 -->
-  <div class="card">
-    <h2>現金種入力</h2>
-    <div class="cash-grid">
-      <div>
-        <label>万円札</label>
-        <input type="number" id="cash10000" value="0" min="0" oninput="calcCash()">
-      </div>
-      <div>
-        <label>五千円札</label>
-        <input type="number" id="cash5000" value="0" min="0" oninput="calcCash()">
-      </div>
-      <div>
-        <label>千円札</label>
-        <input type="number" id="cash1000" value="0" min="0" oninput="calcCash()">
-      </div>
-      <div>
-        <label>500円</label>
-        <input type="number" id="coin500" value="0" min="0" oninput="calcCash()">
-      </div>
-      <div>
-        <label>100円</label>
-        <input type="number" id="coin100" value="0" min="0" oninput="calcCash()">
-      </div>
-      <div>
-        <label>50円</label>
-        <input type="number" id="coin50" value="0" min="0" oninput="calcCash()">
-      </div>
-      <div>
-        <label>10円</label>
-        <input type="number" id="coin10" value="0" min="0" oninput="calcCash()">
-      </div>
-      <div>
-        <label>5円</label>
-        <input type="number" id="coin5" value="0" min="0" oninput="calcCash()">
-      </div>
-      <div>
-        <label>1円</label>
-        <input type="number" id="coin1" value="0" min="0" oninput="calcCash()">
-      </div>
-      <div>
-        <label>前日繰越</label>
-        <input type="number" id="carryOver" value="0" oninput="calcCash()">
-      </div>
-    </div>
-    <table class="data-table" style="margin-top:8px">
-      <tr><td class="label">現金合計</td><td id="cashTotal" style="font-weight:700">0</td></tr>
-      <tr><td class="label">日計表 領収額</td><td id="totalBalance">0</td></tr>
-      <tr style="font-size:1.1rem">
-        <td class="label">差額</td><td id="finalBalance" style="font-weight:700">0</td>
-      </tr>
-    </table>
+        // 初期化
+        document.addEventListener('DOMContentLoaded', function() {
+            setToday();
+            updateCalculations();
+            updatePrintSigns();
+            logDebug('アプリケーションが初期化されました');
 
-    <div class="result-box pending" id="resultBox">— 照合前 —</div>
+            const previousSignBtn = document.getElementById('previousSignBtn');
+            const todaySignBtn = document.getElementById('todaySignBtn');
+            previousSignBtn.classList.add('positive');
+            todaySignBtn.classList.add('positive');
+        });
 
-    <div class="btn-row no-print">
-      <button class="btn btn-primary" onclick="verifyBalance()">照合する</button>
-      <button class="btn btn-success" onclick="printReport()">印刷 & Notion保存</button>
-      <button class="btn btn-secondary" onclick="resetAll()">リセット</button>
-    </div>
-  </div>
-</div>
+        // デバッグログ関数
+        function logDebug(message) {
+            const debugContent = document.getElementById('debugContent');
+            const timestamp = new Date().toLocaleTimeString('ja-JP');
+            const logEntry = `[${timestamp}] ${message}\n`;
+            debugContent.textContent += logEntry;
+            debugContent.scrollTop = debugContent.scrollHeight;
+            console.log(`[DEBUG] ${message}`);
+        }
 
-<script>
-  // ============================
-  // グローバル変数
-  // ============================
-  let selectedFile = null;
-  window.notionPageId = null;
+        // デバッグ情報クリア
+        function clearDebugInfo() {
+            document.getElementById('debugContent').textContent = 'デバッグ情報がここに表示されます...\n';
+            logDebug('デバッグ情報をクリアしました');
+        }
 
-  // ============================
-  // ファイル選択 & D&D
-  // ============================
-  const dropZone = document.getElementById('dropZone');
-  const fileInput = document.getElementById('fileInput');
-  const uploadBtn = document.getElementById('uploadBtn');
+        // ファイル選択ハンドラー
+        function handleFileSelect() {
+            const fileInput = document.getElementById('pdfFile');
+            const uploadBtn = document.getElementById('uploadBtn');
+            const fileStatus = document.getElementById('fileStatus');
 
-  fileInput.addEventListener('change', (e) => {
-    if (e.target.files.length > 0) {
-      selectedFile = e.target.files[0];
-      dropZone.querySelector('p').textContent = `選択済: ${selectedFile.name}`;
-      uploadBtn.disabled = false;
-    }
-  });
+            selectedFile = fileInput.files[0];
 
-  dropZone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    dropZone.classList.add('dragover');
-  });
-  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-  dropZone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropZone.classList.remove('dragover');
-    if (e.dataTransfer.files.length > 0 && e.dataTransfer.files[0].type === 'application/pdf') {
-      selectedFile = e.dataTransfer.files[0];
-      dropZone.querySelector('p').textContent = `選択済: ${selectedFile.name}`;
-      uploadBtn.disabled = false;
-    }
-  });
+            if (selectedFile) {
+                if (selectedFile.type !== 'application/pdf') {
+                    fileStatus.textContent = 'PDFファイルを選択してください';
+                    fileStatus.className = 'file-status error';
+                    uploadBtn.disabled = true;
+                    selectedFile = null;
+                    logDebug(`無効なファイル形式: ${selectedFile.type}`);
+                    return;
+                }
 
-  // ============================
-  // PDF アップロード
-  // ============================
-  uploadBtn.addEventListener('click', uploadPDF);
+                if (selectedFile.size > 15 * 1024 * 1024) {
+                    fileStatus.textContent = 'ファイルサイズが15MBを超えています';
+                    fileStatus.className = 'file-status error';
+                    uploadBtn.disabled = true;
+                    selectedFile = null;
+                    logDebug(`ファイルサイズ超過: ${(selectedFile.size / 1024 / 1024).toFixed(2)}MB`);
+                    return;
+                }
 
-  async function uploadPDF() {
-    if (!selectedFile) { showMessage('PDFファイルを選択してください'); return; }
+                fileStatus.textContent = `${selectedFile.name} (${(selectedFile.size / 1024).toFixed(1)}KB)`;
+                fileStatus.className = 'file-status success';
+                uploadBtn.disabled = false;
+                logDebug(`ファイル選択成功: ${selectedFile.name}, ${(selectedFile.size / 1024).toFixed(1)}KB`);
+            } else {
+                fileStatus.textContent = 'PDFファイルを選択してください';
+                fileStatus.className = 'file-status';
+                uploadBtn.disabled = true;
+                logDebug('ファイル選択がキャンセルされました');
+            }
+        }
 
-    const fileStatus = document.getElementById('fileStatus');
-    uploadBtn.disabled = true;
-    uploadBtn.textContent = 'アップロード中…';
-    fileStatus.textContent = '処理中…';
-    fileStatus.className = 'file-status loading';
+        // PDFアップロード処理
+        async function uploadPDF() {
+            if (!selectedFile) {
+                showMessage('PDFファイルを選択してください');
+                logDebug('エラー: ファイルが選択されていません');
+                return;
+            }
 
-    try {
-      const formData = new FormData();
-      formData.append('file', selectedFile);
+            const uploadBtn = document.getElementById('uploadBtn');
+            const fileStatus = document.getElementById('fileStatus');
 
-      const response = await fetch('/api/parse_daily_report', {
-        method: 'POST',
-        body: formData,
-      });
-      const result = await response.json();
+            uploadBtn.disabled = true;
+            uploadBtn.textContent = 'アップロード中...';
+            fileStatus.textContent = 'PDF解析中...';
+            fileStatus.className = 'file-status loading';
 
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || `HTTP ${response.status}`);
-      }
+            logDebug('PDFアップロード開始');
 
-      populateFormWithExtractedData(result.data);
-      window.notionPageId = result.notion_page_id;
+            try {
+                const formData = new FormData();
+                formData.append('file', selectedFile);
 
-      fileStatus.textContent = 'データ抽出 & Notion保存完了';
-      fileStatus.className = 'file-status success';
-      showMessage('PDFからデータを抽出してNotionに保存しました');
-    } catch (error) {
-      console.error('Upload error:', error);
-      fileStatus.textContent = `エラー: ${error.message}`;
-      fileStatus.className = 'file-status error';
-      showMessage(`エラー: ${error.message}`);
-    } finally {
-      uploadBtn.disabled = false;
-      uploadBtn.textContent = 'アップロード & 自動入力';
-    }
-  }
+                logDebug(`リクエスト送信: ${selectedFile.name}`);
 
-  // ============================
-  // 抽出データ反映
-  // ============================
-  function populateFormWithExtractedData(data) {
-    const fmt = (v) => v != null ? Number(v).toLocaleString() : '-';
+                const response = await fetch('/api/parse_daily_report', {
+                    method: 'POST',
+                    body: formData
+                });
 
-    document.getElementById('reportDate').textContent = data.date || '-';
-    document.getElementById('shahoCount').textContent = fmt(data.shaho_count);
-    document.getElementById('shahoAmount').textContent = fmt(data.shaho_amount);
-    document.getElementById('kokuhoCount').textContent = fmt(data.kokuho_count);
-    document.getElementById('kokuhoAmount').textContent = fmt(data.kokuho_amount);
-    document.getElementById('koukiCount').textContent = fmt(data.kouki_count);
-    document.getElementById('koukiAmount').textContent = fmt(data.kouki_amount);
-    document.getElementById('hokenNashiCount').textContent = fmt(data.hoken_nashi_count);
-    document.getElementById('hokenNashiAmount').textContent = fmt(data.hoken_nashi_amount);
-    document.getElementById('totalCount').textContent = fmt(data.total_count);
-    document.getElementById('totalAmount').textContent = fmt(data.total_amount);
-    document.getElementById('buppanAmount').textContent = fmt(data.buppan_amount);
-    document.getElementById('kaigoAmount').textContent = fmt(data.kaigo_amount);
+                logDebug(`レスポンス受信: ${response.status} ${response.statusText}`);
 
-    // 領収額 = 合計金額（照合用）
-    const totalAmt = Number(data.total_amount) || 0;
-    document.getElementById('totalBalance').textContent = totalAmt.toLocaleString();
+                const result = await response.json();
 
-    calcCash();
-  }
+                if (!response.ok) {
+                    throw new Error(result.error || `HTTP ${response.status}`);
+                }
 
-  // ============================
-  // 現金種計算
-  // ============================
-  function calcCash() {
-    const v = (id) => parseInt(document.getElementById(id).value) || 0;
+                if (result.success && result.data) {
+                    populateFormWithExtractedData(result.data);
+                    window.notionPageId = result.notion_page_id;
 
-    const cashTotal =
-      v('cash10000') * 10000 +
-      v('cash5000') * 5000 +
-      v('cash1000') * 1000 +
-      v('coin500') * 500 +
-      v('coin100') * 100 +
-      v('coin50') * 50 +
-      v('coin10') * 10 +
-      v('coin5') * 5 +
-      v('coin1') * 1 +
-      v('carryOver');
+                    fileStatus.textContent = 'データ抽出 & Notion保存完了！';
+                    fileStatus.className = 'file-status success';
 
-    document.getElementById('cashTotal').textContent = cashTotal.toLocaleString();
+                    showMessage('PDFからデータを抽出してNotionに保存しました！');
+                    logDebug('データ抽出成功');
+                    logDebug(`抽出されたパラメータ: ${JSON.stringify(result.data, null, 2)}`);
 
-    const totalBalance = parseInt(
-      document.getElementById('totalBalance').textContent.replace(/,/g, '')
-    ) || 0;
+                } else {
+                    throw new Error('データ抽出に失敗しました');
+                }
 
-    const diff = cashTotal - totalBalance;
-    document.getElementById('finalBalance').textContent = diff.toLocaleString();
-  }
+            } catch (error) {
+                console.error('Upload error:', error);
+                logDebug(`アップロードエラー: ${error.message}`);
 
-  // ============================
-  // 照合
-  // ============================
-  function verifyBalance() {
-    const diff = parseInt(
-      document.getElementById('finalBalance').textContent.replace(/,/g, '')
-    ) || 0;
+                fileStatus.textContent = `エラー: ${error.message}`;
+                fileStatus.className = 'file-status error';
 
-    const box = document.getElementById('resultBox');
-    if (diff === 0) {
-      box.textContent = '一致';
-      box.className = 'result-box match';
-    } else {
-      box.textContent = `不一致（差額: ${diff.toLocaleString()}円）`;
-      box.className = 'result-box mismatch';
-    }
-  }
+                showMessage(`エラー: ${error.message}`);
 
-  // ============================
-  // フロント画面 → PDF
-  // ============================
-  async function captureFrontendAsPDF() {
-    const element = document.getElementById('verification-page');
-    const canvas = await html2canvas(element, { scale: 2 });
+            } finally {
+                uploadBtn.disabled = false;
+                uploadBtn.textContent = 'アップロード & 自動入力';
+                logDebug('アップロード処理完了');
+            }
+        }
 
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF('l', 'mm', 'b5');
-    const imgData = canvas.toDataURL('image/png');
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    pdf.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight);
+        // 抽出されたデータをフォームに入力
+        function populateFormWithExtractedData(data) {
+            logDebug('フォームへのデータ入力開始');
 
-    return pdf.output('arraybuffer');
-  }
+            function cleanNumericValue(value) {
+                if (!value) return '';
+                return value.toString().replace(/,/g, '');
+            }
 
-  // ============================
-  // Notion 照合結果更新
-  // ============================
-  async function updateNotionWithVerification(isMatched, cashInput) {
-    if (!window.notionPageId) { console.warn('Notion Page ID not found'); return; }
+            // 社保
+            if (data.shaho_count) {
+                document.getElementById('shahoCount').value = cleanNumericValue(data.shaho_count);
+                logDebug(`社保人数: ${data.shaho_count} → ${cleanNumericValue(data.shaho_count)}`);
+            }
+            if (data.shaho_amount) {
+                document.getElementById('shahoIncome').value = cleanNumericValue(data.shaho_amount);
+                logDebug(`社保金額: ${data.shaho_amount} → ${cleanNumericValue(data.shaho_amount)}`);
+            }
 
-    try {
-      const pdfBuffer = await captureFrontendAsPDF();
-      const uint8 = new Uint8Array(pdfBuffer);
-      let binary = '';
-      for (let i = 0; i < uint8.length; i++) {
-        binary += String.fromCharCode(uint8[i]);
-      }
-      const base64 = btoa(binary);
+            // 国保
+            if (data.kokuho_count) {
+                document.getElementById('kokuhoCount').value = cleanNumericValue(data.kokuho_count);
+                logDebug(`国保人数: ${data.kokuho_count} → ${cleanNumericValue(data.kokuho_count)}`);
+            }
+            if (data.kokuho_amount) {
+                document.getElementById('kokuhoIncome').value = cleanNumericValue(data.kokuho_amount);
+                logDebug(`国保金額: ${data.kokuho_amount} → ${cleanNumericValue(data.kokuho_amount)}`);
+            }
 
-      await fetch('/api/update_verification', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          notion_page_id: window.notionPageId,
-          is_matched: isMatched,
-          cash_input: cashInput,
-          frontend_pdf_base64: base64,
-        }),
-      });
-      showMessage('Notionに照合結果を保存しました');
-    } catch (error) {
-      console.error('Notion update error:', error);
-    }
-  }
+            // 後期高齢者
+            if (data.kouki_count) {
+                document.getElementById('koukiCount').value = cleanNumericValue(data.kouki_count);
+                logDebug(`後期高齢者人数: ${data.kouki_count} → ${cleanNumericValue(data.kouki_count)}`);
+            }
+            if (data.kouki_amount) {
+                document.getElementById('koukiIncome').value = cleanNumericValue(data.kouki_amount);
+                logDebug(`後期高齢者金額: ${data.kouki_amount} → ${cleanNumericValue(data.kouki_amount)}`);
+            }
 
-  // ============================
-  // 印刷 & Notion保存
-  // ============================
-  function printReport() {
-    const totalBalance =
-      parseInt(document.getElementById('totalBalance').textContent.replace(/,/g, '')) || 0;
-    const cashTotal =
-      parseInt(document.getElementById('cashTotal').textContent.replace(/,/g, '')) || 0;
-    const isMatched = cashTotal === totalBalance;
+            // 自費
+            if (data.jihi_count) {
+                document.getElementById('jihiCount').value = cleanNumericValue(data.jihi_count);
+                logDebug(`自費人数: ${data.jihi_count} → ${cleanNumericValue(data.jihi_count)}`);
+            }
+            if (data.jihi_amount) {
+                document.getElementById('jihiIncome').value = cleanNumericValue(data.jihi_amount);
+                logDebug(`自費金額: ${data.jihi_amount} → ${cleanNumericValue(data.jihi_amount)}`);
+            }
 
-    updateNotionWithVerification(isMatched, cashTotal);
+            // 保険なし
+            if (data.hoken_nashi_count) {
+                document.getElementById('hokenNashiCount').value = cleanNumericValue(data.hoken_nashi_count);
+                logDebug(`保険なし人数: ${data.hoken_nashi_count} → ${cleanNumericValue(data.hoken_nashi_count)}`);
+            }
+            if (data.hoken_nashi_amount) {
+                document.getElementById('hokenNashiIncome').value = cleanNumericValue(data.hoken_nashi_amount);
+                logDebug(`保険なし金額: ${data.hoken_nashi_amount} → ${cleanNumericValue(data.hoken_nashi_amount)}`);
+            }
 
-    setTimeout(() => {
-      alert('印刷設定:\n用紙：B5横向き\n余白：最小');
-    }, 100);
-    setTimeout(() => { window.print(); }, 500);
-  }
+            // 物販
+            if (data.bushan_note) {
+                document.getElementById('bushanNote').value = data.bushan_note;
+                logDebug(`物販備考: ${data.bushan_note}`);
+            }
+            if (data.bushan_amount) {
+                document.getElementById('bushanIncome').value = cleanNumericValue(data.bushan_amount);
+                logDebug(`物販金額: ${data.bushan_amount} → ${cleanNumericValue(data.bushan_amount)}`);
+            }
 
-  // ============================
-  // リセット
-  // ============================
-  function resetAll() {
-    selectedFile = null;
-    window.notionPageId = null;
-    fileInput.value = '';
-    dropZone.querySelector('p').textContent = 'クリックまたはドラッグ&ドロップでPDFを選択';
-    uploadBtn.disabled = true;
-    document.getElementById('fileStatus').textContent = '';
+            // 前回差額（符号を含む）
+            if (data.previous_difference) {
+                const diffStr = data.previous_difference.toString();
 
-    ['shahoCount','shahoAmount','kokuhoCount','kokuhoAmount',
-     'koukiCount','koukiAmount','hokenNashiCount','hokenNashiAmount',
-     'totalCount','totalAmount','buppanAmount','kaigoAmount'].forEach(id => {
-      document.getElementById(id).textContent = '-';
-    });
-    document.getElementById('reportDate').textContent = '-';
-    document.getElementById('totalBalance').textContent = '0';
+                if (diffStr.startsWith('-')) {
+                    previousDifferenceSign = '-';
+                    const cleanValue = cleanNumericValue(diffStr.substring(1));
+                    document.getElementById('previousDifference').value = cleanValue;
+                    logDebug(`前回差額: ${diffStr} → 符号: ${previousDifferenceSign}, 値: ${cleanValue}`);
+                } else if (diffStr.startsWith('+')) {
+                    previousDifferenceSign = '+';
+                    const cleanValue = cleanNumericValue(diffStr.substring(1));
+                    document.getElementById('previousDifference').value = cleanValue;
+                    logDebug(`前回差額: ${diffStr} → 符号: ${previousDifferenceSign}, 値: ${cleanValue}`);
+                } else {
+                    previousDifferenceSign = '+';
+                    const cleanValue = cleanNumericValue(diffStr);
+                    document.getElementById('previousDifference').value = cleanValue;
+                    logDebug(`前回差額: ${diffStr} → 符号: ${previousDifferenceSign}, 値: ${cleanValue} (符号なし、正として処理)`);
+                }
 
-    ['cash10000','cash5000','cash1000','coin500','coin100',
-     'coin50','coin10','coin5','coin1','carryOver'].forEach(id => {
-      document.getElementById(id).value = '0';
-    });
-    document.getElementById('cashTotal').textContent = '0';
-    document.getElementById('finalBalance').textContent = '0';
+                const previousSignBtn = document.getElementById('previousSignBtn');
+                previousSignBtn.textContent = previousDifferenceSign;
+                previousSignBtn.classList.remove('positive', 'negative');
+                if (previousDifferenceSign === '+') {
+                    previousSignBtn.classList.add('positive');
+                } else {
+                    previousSignBtn.classList.add('negative');
+                }
+            }
 
-    const box = document.getElementById('resultBox');
-    box.textContent = '— 照合前 —';
-    box.className = 'result-box pending';
-  }
+            // 当日差額（符号を含む）
+            if (data.today_difference !== undefined && data.today_difference !== null) {
+                const diffStr = data.today_difference.toString();
 
-  // ============================
-  // メッセージ表示
-  // ============================
-  function showMessage(text) {
-    const el = document.getElementById('message');
-    el.textContent = text;
-    el.style.display = 'block';
-    setTimeout(() => { el.style.display = 'none'; }, 3000);
-  }
-</script>
+                logDebug(`当日差額の生データ: "${diffStr}" (型: ${typeof data.today_difference})`);
+
+                if (diffStr === '' || diffStr === 'null' || diffStr === 'undefined') {
+                    logDebug('当日差額: 空文字またはnull → スキップ');
+                } else {
+                    if (diffStr.startsWith('-')) {
+                        todayDifferenceSign = '-';
+                        const cleanValue = cleanNumericValue(diffStr.substring(1));
+                        document.getElementById('todayDifference').value = cleanValue;
+                        logDebug(`当日差額: ${diffStr} → 符号: ${todayDifferenceSign}, 値: ${cleanValue}`);
+                    } else if (diffStr.startsWith('+')) {
+                        todayDifferenceSign = '+';
+                        const cleanValue = cleanNumericValue(diffStr.substring(1));
+                        document.getElementById('todayDifference').value = cleanValue;
+                        logDebug(`当日差額: ${diffStr} → 符号: ${todayDifferenceSign}, 値: ${cleanValue}`);
+                    } else {
+                        todayDifferenceSign = '+';
+                        const cleanValue = cleanNumericValue(diffStr);
+                        document.getElementById('todayDifference').value = cleanValue;
+                        logDebug(`当日差額: ${diffStr} → 符号: ${todayDifferenceSign}, 値: ${cleanValue} (符号なし、正として処理)`);
+                    }
+
+                    const todaySignBtn = document.getElementById('todaySignBtn');
+                    todaySignBtn.textContent = todayDifferenceSign;
+                    todaySignBtn.classList.remove('positive', 'negative');
+                    if (todayDifferenceSign === '+') {
+                        todaySignBtn.classList.add('positive');
+                    } else {
+                        todaySignBtn.classList.add('negative');
+                    }
+                }
+            } else {
+                logDebug('当日差額: データが存在しません');
+            }
+
+            // 日付をセット
+            if (data.date) {
+                document.getElementById('reportDate').value = data.date;
+                updateDateDisplay();
+                logDebug(`日付: ${data.date}`);
+            }
+
+            updatePrintSigns();
+            updateCalculations();
+            logDebug('フォームへのデータ入力完了');
+
+            const totalAmount = Number(cleanNumericValue(data.shaho_amount || '0')) +
+                               Number(cleanNumericValue(data.kokuho_amount || '0')) +
+                               Number(cleanNumericValue(data.kouki_amount || '0')) +
+                               Number(cleanNumericValue(data.jihi_amount || '0')) +
+                               Number(cleanNumericValue(data.hoken_nashi_amount || '0')) +
+                               Number(cleanNumericValue(data.bushan_amount || '0'));
+
+            const totalPatients = Number(cleanNumericValue(data.shaho_count || '0')) +
+                                 Number(cleanNumericValue(data.kokuho_count || '0')) +
+                                 Number(cleanNumericValue(data.kouki_count || '0')) +
+                                 Number(cleanNumericValue(data.jihi_count || '0')) +
+                                 Number(cleanNumericValue(data.hoken_nashi_count || '0'));
+
+            showMessage(`PDFデータ抽出完了！患者${totalPatients}名、収入合計${totalAmount.toLocaleString()}円`);
+        }
+
+        // 今日の日付を設定
+        function setToday() {
+            const today = new Date();
+            const dateString = today.toISOString().split('T')[0];
+            document.getElementById('reportDate').value = dateString;
+            updateDateDisplay();
+        }
+
+        // 日付表示を更新
+        function updateDateDisplay() {
+            const dateInput = document.getElementById('reportDate');
+            const dateDisplay = document.getElementById('dateDisplay');
+            const printDateValue = document.getElementById('printDateValue');
+            const printDateDisplay = document.getElementById('printDateDisplay');
+
+            if (dateInput.value) {
+                try {
+                    const date = new Date(dateInput.value + 'T00:00:00');
+                    const displayText = `(${date.toLocaleDateString('ja-JP', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        weekday: 'long'
+                    })})`;
+                    dateDisplay.textContent = displayText;
+                    printDateValue.textContent = dateInput.value;
+                    printDateDisplay.textContent = displayText;
+                } catch (error) {
+                    dateDisplay.textContent = '';
+                    printDateDisplay.textContent = '';
+                }
+            }
+        }
+
+        // 日付変更時
+        document.getElementById('reportDate').addEventListener('change', updateDateDisplay);
+
+        // 印刷用符号表示を更新
+        function updatePrintSigns() {
+            const previousPrintSign = document.getElementById('previousPrintSign');
+            const todayPrintSign = document.getElementById('todayPrintSign');
+            previousPrintSign.textContent = previousDifferenceSign;
+            todayPrintSign.textContent = todayDifferenceSign;
+        }
+
+        // 前回差額の符号切り替え
+        function togglePreviousDifferenceSign() {
+            previousDifferenceSign = previousDifferenceSign === '+' ? '-' : '+';
+
+            const signBtn = document.getElementById('previousSignBtn');
+            signBtn.textContent = previousDifferenceSign;
+
+            signBtn.classList.remove('positive', 'negative');
+            if (previousDifferenceSign === '+') {
+                signBtn.classList.add('positive');
+            } else {
+                signBtn.classList.add('negative');
+            }
+
+            updatePrintSigns();
+            updateCalculations();
+        }
+
+        // 当日差額の符号切り替え
+        function toggleTodayDifferenceSign() {
+            todayDifferenceSign = todayDifferenceSign === '+' ? '-' : '+';
+
+            const signBtn = document.getElementById('todaySignBtn');
+            signBtn.textContent = todayDifferenceSign;
+
+            signBtn.classList.remove('positive', 'negative');
+            if (todayDifferenceSign === '+') {
+                signBtn.classList.add('positive');
+            } else {
+                signBtn.classList.add('negative');
+            }
+
+            updatePrintSigns();
+            updateCalculations();
+        }
+
+        // 計算更新
+        function updateCalculations() {
+            // ストック計算
+            const stockItems = [
+                {id: 'stock500', value: 500},
+                {id: 'stock100', value: 100},
+                {id: 'stock50', value: 50},
+                {id: 'stock10', value: 10},
+                {id: 'stock5', value: 5},
+                {id: 'stock1', value: 1}
+            ];
+
+            let stockTotal = 0;
+            stockItems.forEach(item => {
+                const count = parseInt(document.getElementById(item.id).value) || 0;
+                const total = count * item.value;
+                document.getElementById(item.id + 'Total').textContent = total;
+                stockTotal += total;
+            });
+
+            document.getElementById('stockGrandTotal').textContent = stockTotal;
+
+            // 金種計算
+            const currencyItems = [
+                {id: 'bill10000', value: 10000},
+                {id: 'bill5000', value: 5000},
+                {id: 'bill2000', value: 2000},
+                {id: 'bill1000', value: 1000},
+                {id: 'coin500', value: 500},
+                {id: 'coin100', value: 100},
+                {id: 'coin50', value: 50},
+                {id: 'coin10', value: 10},
+                {id: 'coin5', value: 5},
+                {id: 'coin1', value: 1}
+            ];
+
+            let currencyTotal = 0;
+            currencyItems.forEach(item => {
+                const count = parseInt(document.getElementById(item.id).value) || 0;
+                const total = count * item.value;
+                document.getElementById(item.id + 'Total').textContent = total;
+                currencyTotal += total;
+            });
+
+            document.getElementById('currencyTotal').textContent = currencyTotal;
+
+            const totalBalance = stockTotal + currencyTotal;
+            document.getElementById('totalBalance').textContent = totalBalance;
+
+            // 前回差額と当日差額の処理
+            const previousDifferenceValue = parseInt(document.getElementById('previousDifference').value) || 0;
+            const previousDifferenceAmount = previousDifferenceSign === '+' ? previousDifferenceValue : -previousDifferenceValue;
+
+            const todayDifferenceValue = parseInt(document.getElementById('todayDifference').value) || 0;
+            const todayDifferenceAmount = todayDifferenceSign === '+' ? todayDifferenceValue : -todayDifferenceValue;
+
+            // 収入計算
+            const incomeItems = ['shahoIncome', 'kokuhoIncome', 'koukiIncome', 'jihiIncome', 'hokenNashiIncome', 'bushanIncome', 'extraIncome1Amount', 'extraIncome2Amount'];
+            let incomeTotal = previousDifferenceAmount + todayDifferenceAmount;
+            incomeItems.forEach(id => {
+                incomeTotal += parseInt(document.getElementById(id).value) || 0;
+            });
+            document.getElementById('incomeTotal').textContent = incomeTotal;
+            document.getElementById('todayIncome').textContent = incomeTotal;
+
+            // 出金計算
+            const expenseItems = ['expense1', 'expense2', 'expense3', 'expenseDirector'];
+            let expenseTotal = 0;
+            expenseItems.forEach(id => {
+                expenseTotal += parseInt(document.getElementById(id).value) || 0;
+            });
+            document.getElementById('expenseTotal').textContent = expenseTotal;
+            document.getElementById('todayExpense').textContent = expenseTotal;
+
+            // 最終残高計算
+            const previousBalance = parseInt(document.getElementById('previousBalance').value) || 0;
+            const finalBalance = previousBalance + incomeTotal - expenseTotal;
+            document.getElementById('finalBalance').textContent = finalBalance;
+
+            // 残高チェック
+            updateBalanceCheck(totalBalance, finalBalance);
+        }
+
+        // 残高チェック機能
+        function updateBalanceCheck(physicalBalance, calculatedBalance) {
+            const balanceCheck = document.getElementById('balanceCheck');
+            const difference = physicalBalance - calculatedBalance;
+
+            if (difference === 0) {
+                balanceCheck.textContent = `残高チェック: 一致しています (${physicalBalance.toLocaleString()}円)`;
+                balanceCheck.className = 'balance-check match no-print';
+            } else {
+                balanceCheck.textContent = `残高チェック: 差額 ${difference.toLocaleString()}円 (実物: ${physicalBalance.toLocaleString()}円 / 計算: ${calculatedBalance.toLocaleString()}円)`;
+                balanceCheck.className = 'balance-check no-print';
+            }
+        }
+
+        // フロント画面 → PDF
+        async function captureFrontendAsPDF() {
+            const element = document.getElementById('verification-page');
+            const canvas = await html2canvas(element, { scale: 2 });
+
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('l', 'mm', 'b5');
+            const imgData = canvas.toDataURL('image/png');
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
+            pdf.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight);
+
+            return pdf.output('arraybuffer');
+        }
+
+        // Notion 照合結果更新
+        async function updateNotionWithVerification(isMatched, cashInput) {
+            if (!window.notionPageId) { console.warn('Notion Page ID not found'); return; }
+
+            try {
+                const pdfBuffer = await captureFrontendAsPDF();
+                const uint8 = new Uint8Array(pdfBuffer);
+                let binary = '';
+                for (let i = 0; i < uint8.length; i++) {
+                    binary += String.fromCharCode(uint8[i]);
+                }
+                const base64 = btoa(binary);
+
+                await fetch('/api/update_verification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        notion_page_id: window.notionPageId,
+                        is_matched: isMatched,
+                        cash_input: cashInput,
+                        frontend_pdf_base64: base64,
+                    }),
+                });
+                showMessage('Notionに照合結果を保存しました');
+                logDebug('Notion照合結果更新完了');
+            } catch (error) {
+                console.error('Notion update error:', error);
+                logDebug(`Notion更新エラー: ${error.message}`);
+            }
+        }
+
+        // 全クリア
+        function clearAll() {
+            document.getElementById('confirmModal').classList.remove('hidden');
+        }
+
+        function confirmClear() {
+            const inputs = document.querySelectorAll('input[type="number"], input[type="text"]');
+            inputs.forEach(input => {
+                if (input.id !== 'reportDate') {
+                    input.value = '';
+                }
+            });
+
+            // PDFファイル選択もクリア
+            document.getElementById('pdfFile').value = '';
+            selectedFile = null;
+            window.notionPageId = null;
+            document.getElementById('uploadBtn').disabled = true;
+            document.getElementById('fileStatus').textContent = 'PDFファイルを選択してください';
+            document.getElementById('fileStatus').className = 'file-status';
+
+            // 前回差額と当日差額の符号を+にリセット
+            previousDifferenceSign = '+';
+            todayDifferenceSign = '+';
+
+            const previousSignBtn = document.getElementById('previousSignBtn');
+            previousSignBtn.textContent = '+';
+            previousSignBtn.classList.remove('positive', 'negative');
+            previousSignBtn.classList.add('positive');
+
+            const todaySignBtn = document.getElementById('todaySignBtn');
+            todaySignBtn.textContent = '+';
+            todaySignBtn.classList.remove('positive', 'negative');
+            todaySignBtn.classList.add('positive');
+
+            updatePrintSigns();
+
+            document.getElementById('confirmModal').classList.add('hidden');
+            updateCalculations();
+            showMessage('全データをクリアしました。');
+            logDebug('全データクリア完了');
+        }
+
+        function cancelClear() {
+            document.getElementById('confirmModal').classList.add('hidden');
+        }
+
+        // 印刷 & Notion保存
+        function printReport() {
+            // Notion照合結果を保存
+            const physicalBalance = parseInt(document.getElementById('totalBalance').textContent) || 0;
+            const calculatedBalance = parseInt(document.getElementById('finalBalance').textContent) || 0;
+            const isMatched = physicalBalance === calculatedBalance;
+
+            updateNotionWithVerification(isMatched, physicalBalance);
+
+            // 印刷前にブラウザ設定のガイダンスを表示
+            if (navigator.userAgent.includes('iPad') || navigator.userAgent.includes('iPhone')) {
+                setTimeout(() => {
+                    alert('印刷設定:\n1. 用紙サイズ：B5\n2. 方向：横向き\n3. 拡大/縮小：100%\n4. 余白：最小');
+                }, 100);
+            } else if (navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome')) {
+                setTimeout(() => {
+                    alert('印刷設定で「用紙サイズ：B5」「方向：横向き」「余白：最小」を選択してください。');
+                }, 100);
+            } else {
+                setTimeout(() => {
+                    alert('印刷設定:\n用紙：B5横向き\n余白：最小\n拡大/縮小：100%');
+                }, 100);
+            }
+
+            updateDateDisplay();
+
+            setTimeout(() => {
+                window.print();
+            }, 500);
+        }
+
+        // データエクスポート
+        function exportData() {
+            try {
+                const data = {
+                    date: document.getElementById('reportDate').value || 'no-date',
+                    notionPageId: window.notionPageId,
+                    income: {
+                        previousDifference: {
+                            sign: previousDifferenceSign,
+                            amount: parseInt(document.getElementById('previousDifference').value) || 0,
+                            signedAmount: previousDifferenceSign === '+' ?
+                                (parseInt(document.getElementById('previousDifference').value) || 0) :
+                                -(parseInt(document.getElementById('previousDifference').value) || 0)
+                        },
+                        todayDifference: {
+                            sign: todayDifferenceSign,
+                            amount: parseInt(document.getElementById('todayDifference').value) || 0,
+                            signedAmount: todayDifferenceSign === '+' ?
+                                (parseInt(document.getElementById('todayDifference').value) || 0) :
+                                -(parseInt(document.getElementById('todayDifference').value) || 0)
+                        },
+                        shaho: {
+                            count: parseInt(document.getElementById('shahoCount').value) || 0,
+                            amount: parseInt(document.getElementById('shahoIncome').value) || 0
+                        },
+                        kokuho: {
+                            count: parseInt(document.getElementById('kokuhoCount').value) || 0,
+                            amount: parseInt(document.getElementById('kokuhoIncome').value) || 0
+                        },
+                        kouki: {
+                            count: parseInt(document.getElementById('koukiCount').value) || 0,
+                            amount: parseInt(document.getElementById('koukiIncome').value) || 0
+                        },
+                        jihi: {
+                            count: parseInt(document.getElementById('jihiCount').value) || 0,
+                            amount: parseInt(document.getElementById('jihiIncome').value) || 0
+                        },
+                        hokenNashi: {
+                            count: parseInt(document.getElementById('hokenNashiCount').value) || 0,
+                            amount: parseInt(document.getElementById('hokenNashiIncome').value) || 0
+                        },
+                        bushan: {
+                            note: document.getElementById('bushanNote').value || '',
+                            amount: parseInt(document.getElementById('bushanIncome').value) || 0
+                        },
+                        extra1: {
+                            subject: document.getElementById('extraIncome1Subject').value || '',
+                            destination: document.getElementById('extraIncome1Destination').value || '',
+                            note: document.getElementById('extraIncome1Note').value || '',
+                            amount: parseInt(document.getElementById('extraIncome1Amount').value) || 0
+                        },
+                        extra2: {
+                            subject: document.getElementById('extraIncome2Subject').value || '',
+                            destination: document.getElementById('extraIncome2Destination').value || '',
+                            note: document.getElementById('extraIncome2Note').value || '',
+                            amount: parseInt(document.getElementById('extraIncome2Amount').value) || 0
+                        },
+                        total: parseInt(document.getElementById('incomeTotal').textContent) || 0
+                    },
+                    expense: {
+                        expense1: {
+                            subject: document.getElementById('expense1Subject').value || '',
+                            destination: document.getElementById('expense1Destination').value || '',
+                            note: document.getElementById('expense1Note').value || '',
+                            amount: parseInt(document.getElementById('expense1').value) || 0
+                        },
+                        expense2: {
+                            subject: document.getElementById('expense2Subject').value || '',
+                            destination: document.getElementById('expense2Destination').value || '',
+                            note: document.getElementById('expense2Note').value || '',
+                            amount: parseInt(document.getElementById('expense2').value) || 0
+                        },
+                        expense3: {
+                            subject: document.getElementById('expense3Subject').value || '',
+                            destination: document.getElementById('expense3Destination').value || '',
+                            note: document.getElementById('expense3Note').value || '',
+                            amount: parseInt(document.getElementById('expense3').value) || 0
+                        },
+                        director: parseInt(document.getElementById('expenseDirector').value) || 0,
+                        total: parseInt(document.getElementById('expenseTotal').textContent) || 0
+                    },
+                    balance: {
+                        previous: parseInt(document.getElementById('previousBalance').value) || 0,
+                        final: parseInt(document.getElementById('finalBalance').textContent) || 0
+                    },
+                    stock: {
+                        stock500: parseInt(document.getElementById('stock500').value) || 0,
+                        stock100: parseInt(document.getElementById('stock100').value) || 0,
+                        stock50: parseInt(document.getElementById('stock50').value) || 0,
+                        stock10: parseInt(document.getElementById('stock10').value) || 0,
+                        stock5: parseInt(document.getElementById('stock5').value) || 0,
+                        stock1: parseInt(document.getElementById('stock1').value) || 0,
+                        total: parseInt(document.getElementById('stockGrandTotal').textContent) || 0
+                    },
+                    currency: {
+                        bill10000: parseInt(document.getElementById('bill10000').value) || 0,
+                        bill5000: parseInt(document.getElementById('bill5000').value) || 0,
+                        bill2000: parseInt(document.getElementById('bill2000').value) || 0,
+                        bill1000: parseInt(document.getElementById('bill1000').value) || 0,
+                        coin500: parseInt(document.getElementById('coin500').value) || 0,
+                        coin100: parseInt(document.getElementById('coin100').value) || 0,
+                        coin50: parseInt(document.getElementById('coin50').value) || 0,
+                        coin10: parseInt(document.getElementById('coin10').value) || 0,
+                        coin5: parseInt(document.getElementById('coin5').value) || 0,
+                        coin1: parseInt(document.getElementById('coin1').value) || 0,
+                        total: parseInt(document.getElementById('currencyTotal').textContent) || 0
+                    },
+                    totalBalance: parseInt(document.getElementById('totalBalance').textContent) || 0,
+                    balanceCheck: {
+                        physicalBalance: parseInt(document.getElementById('totalBalance').textContent) || 0,
+                        calculatedBalance: parseInt(document.getElementById('finalBalance').textContent) || 0,
+                        difference: (parseInt(document.getElementById('totalBalance').textContent) || 0) - (parseInt(document.getElementById('finalBalance').textContent) || 0),
+                        isMatched: ((parseInt(document.getElementById('totalBalance').textContent) || 0) - (parseInt(document.getElementById('finalBalance').textContent) || 0)) === 0
+                    }
+                };
+
+                const dataStr = JSON.stringify(data, null, 2);
+                const blob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `dental_daily_report_${data.date}.json`;
+                a.style.display = 'none';
+
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+
+                URL.revokeObjectURL(url);
+                showMessage('データをエクスポートしました。');
+                logDebug('データエクスポート完了');
+            } catch (error) {
+                console.error('エクスポート処理でエラー:', error);
+                logDebug(`エクスポートエラー: ${error.message}`);
+                showMessage('エクスポート処理中にエラーが発生しました。');
+            }
+        }
+
+        // メッセージ表示
+        function showMessage(message) {
+            const messageBox = document.getElementById('messageBox');
+            messageBox.textContent = message;
+            messageBox.classList.remove('hidden');
+            setTimeout(() => {
+                messageBox.classList.add('hidden');
+            }, 3000);
+        }
+    </script>
 </body>
 </html>
