@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>日計表 照合システム</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', 'Hiragino Sans', sans-serif; background: #f5f5f5; color: #333; }
+
+    .container { max-width: 960px; margin: 0 auto; padding: 20px; }
+    h1 { text-align: center; margin-bottom: 20px; font-size: 1.4rem; }
+
+    /* --- カード --- */
+    .card {
+      background: #fff; border-radius: 8px; padding: 20px;
+      margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .card h2 { font-size: 1rem; margin-bottom: 12px; color: #555; }
+
+    /* --- ファイルアップロード --- */
+    .upload-area {
+      border: 2px dashed #ccc; border-radius: 8px; padding: 24px;
+      text-align: center; cursor: pointer; transition: border-color 0.2s;
+    }
+    .upload-area:hover { border-color: #4a90d9; }
+    .upload-area.dragover { border-color: #4a90d9; background: #eef4fb; }
+    #fileInput { display: none; }
+    #uploadBtn {
+      margin-top: 12px; padding: 10px 24px; background: #4a90d9; color: #fff;
+      border: none; border-radius: 6px; cursor: pointer; font-size: 0.95rem;
+    }
+    #uploadBtn:disabled { background: #aaa; cursor: not-allowed; }
+    .file-status { margin-top: 8px; font-size: 0.85rem; }
+    .file-status.success { color: #2e7d32; }
+    .file-status.error { color: #c62828; }
+    .file-status.loading { color: #f57c00; }
+
+    /* --- データテーブル --- */
+    .data-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .data-table th, .data-table td {
+      border: 1px solid #ddd; padding: 8px 12px; text-align: right;
+    }
+    .data-table th { background: #f0f0f0; text-align: center; font-weight: 600; }
+    .data-table .label { text-align: left; font-weight: 600; }
+
+    /* --- 現金種入力 --- */
+    .cash-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px;
+      margin-bottom: 16px;
+    }
+    .cash-grid label { font-size: 0.85rem; color: #666; }
+    .cash-grid input {
+      width: 100%; padding: 8px; border: 1px solid #ccc;
+      border-radius: 4px; font-size: 1rem; text-align: right;
+    }
+
+    /* --- 照合結果 --- */
+    .result-box {
+      padding: 16px; border-radius: 8px; text-align: center;
+      font-size: 1.2rem; font-weight: 700; margin-top: 12px;
+    }
+    .result-box.match { background: #e8f5e9; color: #2e7d32; }
+    .result-box.mismatch { background: #ffebee; color: #c62828; }
+    .result-box.pending { background: #f5f5f5; color: #999; }
+
+    /* --- ボタン --- */
+    .btn-row { display: flex; gap: 12px; margin-top: 16px; justify-content: center; }
+    .btn {
+      padding: 10px 24px; border: none; border-radius: 6px;
+      cursor: pointer; font-size: 0.95rem;
+    }
+    .btn-primary { background: #4a90d9; color: #fff; }
+    .btn-success { background: #43a047; color: #fff; }
+    .btn-secondary { background: #757575; color: #fff; }
+
+    /* --- メッセージ --- */
+    #message {
+      position: fixed; top: 16px; right: 16px; padding: 12px 20px;
+      background: #333; color: #fff; border-radius: 6px;
+      font-size: 0.9rem; display: none; z-index: 1000;
+    }
+
+    /* --- 印刷 --- */
+    @media print {
+      body { background: #fff; }
+      .no-print { display: none !important; }
+      .container { max-width: 100%; padding: 0; }
+      .card { box-shadow: none; break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="message"></div>
+
+<div class="container" id="verification-page">
+  <h1>日計表 照合システム</h1>
+
+  <!-- ファイルアップロード -->
+  <div class="card no-print">
+    <h2>日計表PDFアップロード</h2>
+    <div class="upload-area" id="dropZone" onclick="document.getElementById('fileInput').click()">
+      <p>クリックまたはドラッグ&ドロップでPDFを選択</p>
+      <input type="file" id="fileInput" accept=".pdf">
+    </div>
+    <div style="text-align:center">
+      <button id="uploadBtn" disabled>アップロード & 自動入力</button>
+    </div>
+    <div class="file-status" id="fileStatus"></div>
+  </div>
+
+  <!-- 抽出データ -->
+  <div class="card">
+    <h2>抽出データ</h2>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>区分</th>
+          <th>人数</th>
+          <th>金額（円）</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="label">社保</td><td id="shahoCount">-</td><td id="shahoAmount">-</td></tr>
+        <tr><td class="label">国保</td><td id="kokuhoCount">-</td><td id="kokuhoAmount">-</td></tr>
+        <tr><td class="label">後期</td><td id="koukiCount">-</td><td id="koukiAmount">-</td></tr>
+        <tr><td class="label">保険なし</td><td id="hokenNashiCount">-</td><td id="hokenNashiAmount">-</td></tr>
+        <tr style="font-weight:700;background:#fafafa">
+          <td class="label">合計</td><td id="totalCount">-</td><td id="totalAmount">-</td>
+        </tr>
+        <tr><td class="label">物販</td><td>-</td><td id="buppanAmount">-</td></tr>
+        <tr><td class="label">介護</td><td>-</td><td id="kaigoAmount">-</td></tr>
+      </tbody>
+    </table>
+    <p style="margin-top:8px;font-size:0.8rem;color:#999">日付: <span id="reportDate">-</span></p>
+  </div>
+
+  <!-- 現金種入力 -->
+  <div class="card">
+    <h2>現金種入力</h2>
+    <div class="cash-grid">
+      <div>
+        <label>万円札</label>
+        <input type="number" id="cash10000" value="0" min="0" oninput="calcCash()">
+      </div>
+      <div>
+        <label>五千円札</label>
+        <input type="number" id="cash5000" value="0" min="0" oninput="calcCash()">
+      </div>
+      <div>
+        <label>千円札</label>
+        <input type="number" id="cash1000" value="0" min="0" oninput="calcCash()">
+      </div>
+      <div>
+        <label>500円</label>
+        <input type="number" id="coin500" value="0" min="0" oninput="calcCash()">
+      </div>
+      <div>
+        <label>100円</label>
+        <input type="number" id="coin100" value="0" min="0" oninput="calcCash()">
+      </div>
+      <div>
+        <label>50円</label>
+        <input type="number" id="coin50" value="0" min="0" oninput="calcCash()">
+      </div>
+      <div>
+        <label>10円</label>
+        <input type="number" id="coin10" value="0" min="0" oninput="calcCash()">
+      </div>
+      <div>
+        <label>5円</label>
+        <input type="number" id="coin5" value="0" min="0" oninput="calcCash()">
+      </div>
+      <div>
+        <label>1円</label>
+        <input type="number" id="coin1" value="0" min="0" oninput="calcCash()">
+      </div>
+      <div>
+        <label>前日繰越</label>
+        <input type="number" id="carryOver" value="0" oninput="calcCash()">
+      </div>
+    </div>
+    <table class="data-table" style="margin-top:8px">
+      <tr><td class="label">現金合計</td><td id="cashTotal" style="font-weight:700">0</td></tr>
+      <tr><td class="label">日計表 領収額</td><td id="totalBalance">0</td></tr>
+      <tr style="font-size:1.1rem">
+        <td class="label">差額</td><td id="finalBalance" style="font-weight:700">0</td>
+      </tr>
+    </table>
+
+    <div class="result-box pending" id="resultBox">— 照合前 —</div>
+
+    <div class="btn-row no-print">
+      <button class="btn btn-primary" onclick="verifyBalance()">照合する</button>
+      <button class="btn btn-success" onclick="printReport()">印刷 & Notion保存</button>
+      <button class="btn btn-secondary" onclick="resetAll()">リセット</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ============================
+  // グローバル変数
+  // ============================
+  let selectedFile = null;
+  window.notionPageId = null;
+
+  // ============================
+  // ファイル選択 & D&D
+  // ============================
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+  const uploadBtn = document.getElementById('uploadBtn');
+
+  fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+      selectedFile = e.target.files[0];
+      dropZone.querySelector('p').textContent = `選択済: ${selectedFile.name}`;
+      uploadBtn.disabled = false;
+    }
+  });
+
+  dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('dragover');
+  });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    if (e.dataTransfer.files.length > 0 && e.dataTransfer.files[0].type === 'application/pdf') {
+      selectedFile = e.dataTransfer.files[0];
+      dropZone.querySelector('p').textContent = `選択済: ${selectedFile.name}`;
+      uploadBtn.disabled = false;
+    }
+  });
+
+  // ============================
+  // PDF アップロード
+  // ============================
+  uploadBtn.addEventListener('click', uploadPDF);
+
+  async function uploadPDF() {
+    if (!selectedFile) { showMessage('PDFファイルを選択してください'); return; }
+
+    const fileStatus = document.getElementById('fileStatus');
+    uploadBtn.disabled = true;
+    uploadBtn.textContent = 'アップロード中…';
+    fileStatus.textContent = '処理中…';
+    fileStatus.className = 'file-status loading';
+
+    try {
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+
+      const response = await fetch('/api/parse_daily_report', {
+        method: 'POST',
+        body: formData,
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+
+      populateFormWithExtractedData(result.data);
+      window.notionPageId = result.notion_page_id;
+
+      fileStatus.textContent = 'データ抽出 & Notion保存完了';
+      fileStatus.className = 'file-status success';
+      showMessage('PDFからデータを抽出してNotionに保存しました');
+    } catch (error) {
+      console.error('Upload error:', error);
+      fileStatus.textContent = `エラー: ${error.message}`;
+      fileStatus.className = 'file-status error';
+      showMessage(`エラー: ${error.message}`);
+    } finally {
+      uploadBtn.disabled = false;
+      uploadBtn.textContent = 'アップロード & 自動入力';
+    }
+  }
+
+  // ============================
+  // 抽出データ反映
+  // ============================
+  function populateFormWithExtractedData(data) {
+    const fmt = (v) => v != null ? Number(v).toLocaleString() : '-';
+
+    document.getElementById('reportDate').textContent = data.date || '-';
+    document.getElementById('shahoCount').textContent = fmt(data.shaho_count);
+    document.getElementById('shahoAmount').textContent = fmt(data.shaho_amount);
+    document.getElementById('kokuhoCount').textContent = fmt(data.kokuho_count);
+    document.getElementById('kokuhoAmount').textContent = fmt(data.kokuho_amount);
+    document.getElementById('koukiCount').textContent = fmt(data.kouki_count);
+    document.getElementById('koukiAmount').textContent = fmt(data.kouki_amount);
+    document.getElementById('hokenNashiCount').textContent = fmt(data.hoken_nashi_count);
+    document.getElementById('hokenNashiAmount').textContent = fmt(data.hoken_nashi_amount);
+    document.getElementById('totalCount').textContent = fmt(data.total_count);
+    document.getElementById('totalAmount').textContent = fmt(data.total_amount);
+    document.getElementById('buppanAmount').textContent = fmt(data.buppan_amount);
+    document.getElementById('kaigoAmount').textContent = fmt(data.kaigo_amount);
+
+    // 領収額 = 合計金額（照合用）
+    const totalAmt = Number(data.total_amount) || 0;
+    document.getElementById('totalBalance').textContent = totalAmt.toLocaleString();
+
+    calcCash();
+  }
+
+  // ============================
+  // 現金種計算
+  // ============================
+  function calcCash() {
+    const v = (id) => parseInt(document.getElementById(id).value) || 0;
+
+    const cashTotal =
+      v('cash10000') * 10000 +
+      v('cash5000') * 5000 +
+      v('cash1000') * 1000 +
+      v('coin500') * 500 +
+      v('coin100') * 100 +
+      v('coin50') * 50 +
+      v('coin10') * 10 +
+      v('coin5') * 5 +
+      v('coin1') * 1 +
+      v('carryOver');
+
+    document.getElementById('cashTotal').textContent = cashTotal.toLocaleString();
+
+    const totalBalance = parseInt(
+      document.getElementById('totalBalance').textContent.replace(/,/g, '')
+    ) || 0;
+
+    const diff = cashTotal - totalBalance;
+    document.getElementById('finalBalance').textContent = diff.toLocaleString();
+  }
+
+  // ============================
+  // 照合
+  // ============================
+  function verifyBalance() {
+    const diff = parseInt(
+      document.getElementById('finalBalance').textContent.replace(/,/g, '')
+    ) || 0;
+
+    const box = document.getElementById('resultBox');
+    if (diff === 0) {
+      box.textContent = '一致';
+      box.className = 'result-box match';
+    } else {
+      box.textContent = `不一致（差額: ${diff.toLocaleString()}円）`;
+      box.className = 'result-box mismatch';
+    }
+  }
+
+  // ============================
+  // フロント画面 → PDF
+  // ============================
+  async function captureFrontendAsPDF() {
+    const element = document.getElementById('verification-page');
+    const canvas = await html2canvas(element, { scale: 2 });
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('l', 'mm', 'b5');
+    const imgData = canvas.toDataURL('image/png');
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    pdf.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight);
+
+    return pdf.output('arraybuffer');
+  }
+
+  // ============================
+  // Notion 照合結果更新
+  // ============================
+  async function updateNotionWithVerification(isMatched, cashInput) {
+    if (!window.notionPageId) { console.warn('Notion Page ID not found'); return; }
+
+    try {
+      const pdfBuffer = await captureFrontendAsPDF();
+      const uint8 = new Uint8Array(pdfBuffer);
+      let binary = '';
+      for (let i = 0; i < uint8.length; i++) {
+        binary += String.fromCharCode(uint8[i]);
+      }
+      const base64 = btoa(binary);
+
+      await fetch('/api/update_verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          notion_page_id: window.notionPageId,
+          is_matched: isMatched,
+          cash_input: cashInput,
+          frontend_pdf_base64: base64,
+        }),
+      });
+      showMessage('Notionに照合結果を保存しました');
+    } catch (error) {
+      console.error('Notion update error:', error);
+    }
+  }
+
+  // ============================
+  // 印刷 & Notion保存
+  // ============================
+  function printReport() {
+    const totalBalance =
+      parseInt(document.getElementById('totalBalance').textContent.replace(/,/g, '')) || 0;
+    const cashTotal =
+      parseInt(document.getElementById('cashTotal').textContent.replace(/,/g, '')) || 0;
+    const isMatched = cashTotal === totalBalance;
+
+    updateNotionWithVerification(isMatched, cashTotal);
+
+    setTimeout(() => {
+      alert('印刷設定:\n用紙：B5横向き\n余白：最小');
+    }, 100);
+    setTimeout(() => { window.print(); }, 500);
+  }
+
+  // ============================
+  // リセット
+  // ============================
+  function resetAll() {
+    selectedFile = null;
+    window.notionPageId = null;
+    fileInput.value = '';
+    dropZone.querySelector('p').textContent = 'クリックまたはドラッグ&ドロップでPDFを選択';
+    uploadBtn.disabled = true;
+    document.getElementById('fileStatus').textContent = '';
+
+    ['shahoCount','shahoAmount','kokuhoCount','kokuhoAmount',
+     'koukiCount','koukiAmount','hokenNashiCount','hokenNashiAmount',
+     'totalCount','totalAmount','buppanAmount','kaigoAmount'].forEach(id => {
+      document.getElementById(id).textContent = '-';
+    });
+    document.getElementById('reportDate').textContent = '-';
+    document.getElementById('totalBalance').textContent = '0';
+
+    ['cash10000','cash5000','cash1000','coin500','coin100',
+     'coin50','coin10','coin5','coin1','carryOver'].forEach(id => {
+      document.getElementById(id).value = '0';
+    });
+    document.getElementById('cashTotal').textContent = '0';
+    document.getElementById('finalBalance').textContent = '0';
+
+    const box = document.getElementById('resultBox');
+    box.textContent = '— 照合前 —';
+    box.className = 'result-box pending';
+  }
+
+  // ============================
+  // メッセージ表示
+  // ============================
+  function showMessage(text) {
+    const el = document.getElementById('message');
+    el.textContent = text;
+    el.style.display = 'block';
+    setTimeout(() => { el.style.display = 'none'; }, 3000);
+  }
+</script>
+</body>
+</html>
