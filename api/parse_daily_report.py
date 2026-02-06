@@ -147,7 +147,7 @@ def parse_pdf(pdf_file):
         # 介護
         kaigo_m = re.search(r"介護.*?([\d,]+)", last_text)
         if kaigo_m:
-            summary["kaigo_amount"] = int(kaigo_m.group(1).replace(",", "")))
+            summary["kaigo_amount"] = int(kaigo_m.group(1).replace(",", ""))
 
         return summary
 
