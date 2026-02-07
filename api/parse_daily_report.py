@@ -6,6 +6,7 @@ import re
 import os
 import cgi
 from datetime import datetime
+from collections import defaultdict
 from notion_client import Client
 
 from utils.notion_uploader import upload_file_to_notion
@@ -78,14 +79,81 @@ class handler(BaseHTTPRequestHandler):
 
 
 # ====================
-# PDF 解析
+# ヘルパー関数
+# ====================
+def safe_int(val):
+    """空・None・カンマ付き文字列を安全にintへ"""
+    if val is None or str(val).strip() == '':
+        return 0
+    # 改行・カンマ・スペース除去してint変換
+    cleaned = str(val).replace(',', '').replace('\n', '').strip()
+    try:
+        return int(cleaned)
+    except ValueError:
+        return 0
+
+
+def parse_row(row):
+    """テーブルの1行をパースして辞書を返す"""
+    # 氏名セル: "No.11378\n松本　正和" or "No.11378\n松本　正和\n再初診"
+    name_cell = row[1] or ''
+    no_match = re.search(r'No\.(\d+)', name_cell)
+    patient_no = no_match.group(1) if no_match else ''
+    name_lines = [l.strip() for l in name_cell.split('\n')
+                  if not l.strip().startswith('No.') and l.strip()]
+    # "再初診" "新患" などの修飾語を除外して氏名だけ取る
+    modifiers = {'再初診', '新患'}
+    name = ' '.join(l for l in name_lines if l not in modifiers).strip()
+
+    # 負担額セル: "30%\n6,520" → %と金額を分離
+    futan_cell = row[4] or ''
+    futan_parts = futan_cell.split('\n')
+    futan_ratio = futan_parts[0].strip() if len(futan_parts) >= 1 else ''
+    futan_amount = safe_int(futan_parts[1]) if len(futan_parts) >= 2 else 0
+
+    return {
+        'number': int(row[0]),
+        'patient_no': patient_no,
+        'name': name,
+        'insurance_type': (row[2] or '').strip(),
+        'points': safe_int(row[3]),
+        'ratio': futan_ratio,
+        'futan_amount': futan_amount,
+        'kaigo_units': safe_int(row[5]),
+        'kaigo_amount': safe_int(row[6]),
+        'jihi': safe_int(row[7]),
+        'buppan': safe_int(row[8]),
+        'previous_diff': safe_int(row[9]),
+        'receipt_amount': safe_int(row[10]),
+        'diff': safe_int(row[11]),
+    }
+
+
+def classify_insurance(ins_type):
+    """保険種別を4分類に正規化"""
+    if '社' in ins_type:
+        return '社保'
+    elif '国' in ins_type:
+        return '国保'
+    elif '後期' in ins_type:
+        return '後期'
+    elif '保険なし' in ins_type:
+        return '保険なし'
+    return 'その他'
+
+
+# ====================
+# PDF 解析（extract_table ベース）
 # ====================
 def parse_pdf(pdf_file):
-    """PDF から日付と集計データを抽出"""
+    """PDF から日付・個別行データ・集計データを抽出
+
+    extract_table() を使用し、空セルも None として保持するため
+    前回差額・自費・物販・介護など空欄が多い列も正確にマッピングできる。
+    """
     with pdfplumber.open(pdf_file) as pdf:
-        # --- 日付 ---
+        # --- 日付（1ページ目のテキストから） ---
         first_text = pdf.pages[0].extract_text() or ""
-        # スペース許容の日付パターン
         date_match = re.search(r"令和\s*(\d+)\s*年\s*(\d+)\s*月\s*(\d+)\s*日", first_text)
         if date_match:
             year = int(date_match.group(1)) + 2018
@@ -95,71 +163,68 @@ def parse_pdf(pdf_file):
         else:
             date_str = datetime.now().strftime("%Y-%m-%d")
 
-        # --- 集計（最終ページ） ---
-        last_text = pdf.pages[-1].extract_text() or ""
+        # --- 全ページからテーブル行を抽出 ---
+        all_rows = []
+        for page in pdf.pages:
+            table = page.extract_table()
+            if not table:
+                continue
+            for row in table:
+                # 番号列が数字の行のみ（ヘッダー・合計行を除外）
+                if row[0] and row[0].strip().isdigit():
+                    parsed = parse_row(row)
+                    if parsed:
+                        all_rows.append(parsed)
+
+        # --- 個別行データから集計を算出 ---
+        cat_summary = defaultdict(lambda: {"count": 0, "points": 0, "amount": 0})
+
+        total_receipt = 0
+        total_jihi = 0
+        total_buppan = 0
+        total_kaigo = 0
+        total_previous_diff = 0
+
+        for r in all_rows:
+            cat = classify_insurance(r['insurance_type'])
+            if cat != 'その他':
+                cat_summary[cat]["count"] += 1
+                cat_summary[cat]["points"] += r['points']
+                cat_summary[cat]["amount"] += r['futan_amount']
+            total_receipt += r['receipt_amount']
+            total_jihi += r['jihi']
+            total_buppan += r['buppan']
+            total_kaigo += r['kaigo_amount']
+            total_previous_diff += r['previous_diff']
+
+        # 保険合計
+        insurance_total_count = sum(v["count"] for v in cat_summary.values())
+        insurance_total_amount = sum(v["amount"] for v in cat_summary.values())
 
         summary = {
             "date": date_str,
-            "shaho_count": 0,
-            "shaho_amount": 0,
-            "kokuho_count": 0,
-            "kokuho_amount": 0,
-            "kouki_count": 0,
-            "kouki_amount": 0,
-            "jihi_count": 0,
-            "jihi_amount": 0,
-            "hoken_nashi_count": 0,
-            "hoken_nashi_amount": 0,
-            "total_count": 0,
-            "total_amount": 0,
-            "bushan_amount": 0,
-            "kaigo_amount": 0,
-            "zenkai_sagaku": 0,
+            "rows": all_rows,
+            "shaho_count": cat_summary["社保"]["count"],
+            "shaho_points": cat_summary["社保"]["points"],
+            "shaho_amount": cat_summary["社保"]["amount"],
+            "kokuho_count": cat_summary["国保"]["count"],
+            "kokuho_points": cat_summary["国保"]["points"],
+            "kokuho_amount": cat_summary["国保"]["amount"],
+            "kouki_count": cat_summary["後期"]["count"],
+            "kouki_points": cat_summary["後期"]["points"],
+            "kouki_amount": cat_summary["後期"]["amount"],
+            "hoken_nashi_count": cat_summary["保険なし"]["count"],
+            "hoken_nashi_points": cat_summary["保険なし"]["points"],
+            "hoken_nashi_amount": cat_summary["保険なし"]["amount"],
+            "total_count": len(all_rows),
+            "insurance_total_count": insurance_total_count,
+            "total_amount": insurance_total_amount,
+            "total_receipt": total_receipt,
+            "jihi_amount": total_jihi,
+            "buppan_amount": total_buppan,
+            "kaigo_amount": total_kaigo,
+            "previous_diff": total_previous_diff,
         }
-
-        patterns = {
-            "shaho": r"社保\s+(\d+)\s+[\d,]+\s+([\d,]+)",
-            "kokuho": r"国保\s+(\d+)\s+[\d,]+\s+([\d,]+)",
-            "kouki": r"後期\s+(\d+)\s+[\d,]+\s+([\d,]+)",
-            "hoken_nashi": r"保険なし\s+(\d+)\s+[\d,]+\s+([\d,]+)",
-        }
-        for key, pattern in patterns.items():
-            matches = re.findall(pattern, last_text)
-            if matches:
-                last_match = matches[-1]
-                summary[f"{key}_count"] = int(last_match[0])
-                summary[f"{key}_amount"] = int(last_match[1].replace(",", ""))
-
-        # 合計
-        total_m = re.search(r"合計\s+(\d+)\s+[\d,]+\s+([\d,]+)", last_text)
-        if total_m:
-            summary["total_count"] = int(total_m.group(1))
-            summary["total_amount"] = int(total_m.group(2).replace(",", ""))
-
-        # 自費・前回差額（全体合計行から位置ベースで抽出）
-        # 合計行: 人数 点数 負担額 介護単位 介護負担額 自費 物販 前回差額 領収額 差額
-        goukei_full_m = re.search(
-            r"合計\s+(\d+)\s+([\d,]+)\s+([\d,]+)\s+(\d+)\s+(\d+)\s+([\d,]+)\s+([\d,]+)\s+(-?[\d,]+)\s+([\d,]+)\s+(-?\d+)",
-            last_text,
-        )
-        if goukei_full_m:
-            summary["jihi_amount"] = int(goukei_full_m.group(6).replace(",", ""))
-            summary["zenkai_sagaku"] = int(goukei_full_m.group(8).replace(",", ""))
-        else:
-            # フォールバック: 「自費 金額」の形式が存在する場合
-            jihi_m = re.search(r"自費\s+([\d,]+)", last_text)
-            if jihi_m:
-                summary["jihi_amount"] = int(jihi_m.group(1).replace(",", ""))
-
-        # 物販
-        bushan_m = re.search(r"物販合計\s+([\d,]+)", last_text)
-        if bushan_m:
-            summary["bushan_amount"] = int(bushan_m.group(1).replace(",", ""))
-
-        # 介護
-        kaigo_m = re.search(r"介護.*?([\d,]+)", last_text)
-        if kaigo_m:
-            summary["kaigo_amount"] = int(kaigo_m.group(1).replace(",", ""))
 
         return summary
 
@@ -185,15 +250,12 @@ def save_to_notion(pdf_bytes, summary):
             "国保金額": {"number": summary["kokuho_amount"]},
             "後期人数": {"number": summary["kouki_count"]},
             "後期金額": {"number": summary["kouki_amount"]},
-            "自費人数": {"number": summary["jihi_count"]},
-            "自費金額": {"number": summary["jihi_amount"]},
             "保険なし人数": {"number": summary["hoken_nashi_count"]},
             "保険なし金額": {"number": summary["hoken_nashi_amount"]},
             "合計人数": {"number": summary["total_count"]},
             "合計金額": {"number": summary["total_amount"]},
-            "物販": {"number": summary["bushan_amount"]},
+            "物販": {"number": summary["buppan_amount"]},
             "介護": {"number": summary["kaigo_amount"]},
-            "前回差額": {"number": summary["zenkai_sagaku"]},
             "照合状態": {"select": {"name": "未照合"}},
         },
     )
