@@ -47,15 +47,16 @@ class handler(BaseHTTPRequestHandler):
             pdf_bytes = file_item.file.read()
 
             # 1. PDF 解析
-            summary = parse_pdf(io.BytesIO(pdf_bytes))
+            parsed_data = parse_pdf(io.BytesIO(pdf_bytes))
 
             # 2. Notion に保存
-            notion_page_id = save_to_notion(pdf_bytes, summary)
+            notion_page_id = save_to_notion(pdf_bytes, parsed_data["summary"])
 
-            # 3. レスポンス
+            # 3. レスポンス（個別データと集計データの両方を返す）
             result = {
                 "success": True,
-                "data": summary,
+                "summary": parsed_data["summary"],
+                "patients": parsed_data["patients"],
                 "notion_page_id": notion_page_id,
             }
             self._send_json(200, result)
@@ -81,11 +82,10 @@ class handler(BaseHTTPRequestHandler):
 # PDF 解析
 # ====================
 def parse_pdf(pdf_file):
-    """PDF から日付と集計データを抽出"""
+    """PDF から日付、個別患者データ、集計データを抽出"""
     with pdfplumber.open(pdf_file) as pdf:
         # --- 日付 ---
         first_text = pdf.pages[0].extract_text() or ""
-        # スペース許容の日付パターン
         date_match = re.search(r"令和\s*(\d+)\s*年\s*(\d+)\s*月\s*(\d+)\s*日", first_text)
         if date_match:
             year = int(date_match.group(1)) + 2018
@@ -95,8 +95,42 @@ def parse_pdf(pdf_file):
         else:
             date_str = datetime.now().strftime("%Y-%m-%d")
 
-        # --- 集計（最終ページ） ---
-        last_text = pdf.pages[-1].extract_text() or ""
+        # --- 個別患者データ抽出 ---
+        patients = []
+        for page in pdf.pages:
+            tables = page.extract_tables()
+            if not tables:
+                continue
+
+            for table in tables:
+                if not table or len(table) < 2:
+                    continue
+
+                # ヘッダー行をスキップ（1行目）
+                for row in table[1:]:
+                    if not row or len(row) < 2:
+                        continue
+
+                    # 空行や集計行をスキップ
+                    first_col = (row[0] or "").strip()
+                    if not first_col or first_col in ["合計", "訪問（再掲）", "社保", "国保", "後期", "保険なし", "10%対象", "8%対象", "物販合計"]:
+                        continue
+
+                    # 番号が数字でない場合はスキップ
+                    if not first_col.isdigit():
+                        continue
+
+                    # 患者データをパース
+                    patient = parse_patient_row(row)
+                    if patient:
+                        patients.append(patient)
+
+        # --- 集計データ（全ページから検索） ---
+        # 詳細な合計行は最終ページではなく途中のページにある可能性があるため、
+        # 全ページのテキストを結合して検索する
+        all_text = ""
+        for page in pdf.pages:
+            all_text += (page.extract_text() or "") + "\n"
 
         summary = {
             "date": date_str,
@@ -124,44 +158,156 @@ def parse_pdf(pdf_file):
             "hoken_nashi": r"保険なし\s+(\d+)\s+[\d,]+\s+([\d,]+)",
         }
         for key, pattern in patterns.items():
-            matches = re.findall(pattern, last_text)
+            matches = re.findall(pattern, all_text)
             if matches:
                 last_match = matches[-1]
                 summary[f"{key}_count"] = int(last_match[0])
                 summary[f"{key}_amount"] = int(last_match[1].replace(",", ""))
 
         # 合計
-        total_m = re.search(r"合計\s+(\d+)\s+[\d,]+\s+([\d,]+)", last_text)
+        total_m = re.search(r"合計\s+(\d+)\s+[\d,]+\s+([\d,]+)", all_text)
         if total_m:
             summary["total_count"] = int(total_m.group(1))
             summary["total_amount"] = int(total_m.group(2).replace(",", ""))
 
         # 自費・前回差額（全体合計行から位置ベースで抽出）
-        # 合計行: 人数 点数 負担額 介護単位 介護負担額 自費 物販 前回差額 領収額 差額
         goukei_full_m = re.search(
             r"合計\s+(\d+)\s+([\d,]+)\s+([\d,]+)\s+(\d+)\s+(\d+)\s+([\d,]+)\s+([\d,]+)\s+(-?[\d,]+)\s+([\d,]+)\s+(-?\d+)",
-            last_text,
+            all_text,
         )
         if goukei_full_m:
             summary["jihi_amount"] = int(goukei_full_m.group(6).replace(",", ""))
             summary["zenkai_sagaku"] = int(goukei_full_m.group(8).replace(",", ""))
         else:
-            # フォールバック: 「自費 金額」の形式が存在する場合
-            jihi_m = re.search(r"自費\s+([\d,]+)", last_text)
+            jihi_m = re.search(r"自費\s+([\d,]+)", all_text)
             if jihi_m:
                 summary["jihi_amount"] = int(jihi_m.group(1).replace(",", ""))
 
         # 物販
-        bushan_m = re.search(r"物販合計\s+([\d,]+)", last_text)
+        bushan_m = re.search(r"物販合計\s+([\d,]+)", all_text)
         if bushan_m:
             summary["bushan_amount"] = int(bushan_m.group(1).replace(",", ""))
 
         # 介護
-        kaigo_m = re.search(r"介護.*?([\d,]+)", last_text)
+        kaigo_m = re.search(r"介護.*?([\d,]+)", all_text)
         if kaigo_m:
             summary["kaigo_amount"] = int(kaigo_m.group(1).replace(",", ""))
 
-        return summary
+        return {
+            "summary": summary,
+            "patients": patients,
+        }
+
+
+def parse_patient_row(row):
+    """テーブル行から患者データをパース"""
+    try:
+        def safe_int(value):
+            """文字列を安全に整数に変換"""
+            if value is None or value == "":
+                return 0
+            value = str(value).strip().replace(",", "").replace(" ", "").replace("\n", "")
+            # マイナス記号を処理
+            if value.startswith("-"):
+                return -int(value[1:]) if value[1:].isdigit() else 0
+            return int(value) if value.isdigit() else 0
+
+        def safe_str(value):
+            """文字列を安全に取得（改行を処理）"""
+            if not value:
+                return ""
+            # 改行で分割して、空でない行を結合
+            lines = [line.strip() for line in str(value).split("\n") if line.strip()]
+            return " ".join(lines)
+
+        def extract_multi_line_cell(value):
+            """複数行のセルから各行を抽出"""
+            if not value:
+                return []
+            return [line.strip() for line in str(value).split("\n") if line.strip()]
+
+        # 1列目: 番号・患者ID・氏名が複数行で含まれる可能性がある
+        first_col_lines = extract_multi_line_cell(row[0]) if len(row) > 0 else []
+
+        # 番号を抽出（最初の数字のみの行）
+        number = 0
+        patient_id = ""
+        name = ""
+
+        for line in first_col_lines:
+            if line.isdigit() and number == 0:
+                number = int(line)
+            elif line.startswith("No."):
+                patient_id = line
+            elif line and not line.isdigit() and not line.startswith("No."):
+                name = line
+
+        # 2列目: 氏名（1列目に氏名がない場合）
+        if not name and len(row) > 1:
+            second_col_lines = extract_multi_line_cell(row[1])
+            for line in second_col_lines:
+                if line.startswith("No.") and not patient_id:
+                    patient_id = line
+                elif line and not line.startswith("No."):
+                    name = line if not name else name
+
+        # 保険種別: 「再初診」などの複数行を処理
+        insurance_type = safe_str(row[2]) if len(row) > 2 else ""
+
+        # 点数（数値のみを抽出）
+        points = safe_int(row[3]) if len(row) > 3 else 0
+
+        # 負担額（「30%」などと「金額」が同じセルにある可能性）
+        burden_col = extract_multi_line_cell(row[4]) if len(row) > 4 else []
+        burden_amount = 0
+        for line in burden_col:
+            if line and line.replace(",", "").replace(" ", "").isdigit():
+                burden_amount = safe_int(line)
+                break
+
+        # 介護単位
+        kaigo_units = safe_int(row[5]) if len(row) > 5 else 0
+
+        # 介護負担額
+        kaigo_burden = safe_int(row[6]) if len(row) > 6 else 0
+
+        # 自費
+        jihi = safe_int(row[7]) if len(row) > 7 else 0
+
+        # 物販
+        bushan = safe_int(row[8]) if len(row) > 8 else 0
+
+        # 前回差額
+        zenkai_sagaku = safe_int(row[9]) if len(row) > 9 else 0
+
+        # 領収額
+        receipt_amount = safe_int(row[10]) if len(row) > 10 else 0
+
+        # 差額
+        sagaku = safe_int(row[11]) if len(row) > 11 else 0
+
+        # 備考
+        remarks = safe_str(row[12]) if len(row) > 12 else ""
+
+        return {
+            "number": number,
+            "patient_id": patient_id,
+            "name": name,
+            "insurance_type": insurance_type,
+            "points": points,
+            "burden_amount": burden_amount,
+            "kaigo_units": kaigo_units,
+            "kaigo_burden": kaigo_burden,
+            "jihi": jihi,
+            "bushan": bushan,
+            "zenkai_sagaku": zenkai_sagaku,
+            "receipt_amount": receipt_amount,
+            "sagaku": sagaku,
+            "remarks": remarks,
+        }
+    except Exception as e:
+        print(f"Warning: Failed to parse patient row: {e}")
+        return None
 
 
 # ====================
