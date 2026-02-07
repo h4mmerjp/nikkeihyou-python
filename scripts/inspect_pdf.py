@@ -1,4 +1,4 @@
-"""total_d.pdf の pdfplumber 抽出テキストと parse_pdf 結果を確認するスクリプト"""
+"""total_d.pdf の pdfplumber 抽出テキスト・テーブルと parse_pdf 結果を確認するスクリプト"""
 import sys
 import os
 import io
@@ -28,9 +28,18 @@ def main():
     with pdfplumber.open(PDF_PATH) as pdf:
         for i, page in enumerate(pdf.pages):
             text = page.extract_text() or ""
-            print(f"\n--- Page {i+1}/{len(pdf.pages)} ---")
+            print(f"\n--- Page {i+1}/{len(pdf.pages)} (text) ---")
             print(text)
             print(f"--- End Page {i+1} (length: {len(text)} chars) ---")
+
+            table = page.extract_table()
+            if table:
+                print(f"\n--- Page {i+1}/{len(pdf.pages)} (table: {len(table)} rows) ---")
+                for j, row in enumerate(table):
+                    print(f"  Row {j}: {row}")
+                print(f"--- End Page {i+1} table ---")
+            else:
+                print(f"\n--- Page {i+1}: no table found ---")
 
     print("\n" + "=" * 60)
     print("parse_pdf() 結果")
@@ -42,7 +51,12 @@ def main():
     result = parse_pdf(io.BytesIO(pdf_bytes))
 
     for key, value in result.items():
-        print(f"  {key}: {value}")
+        if key == "rows":
+            print(f"  rows: [{len(value)} rows]")
+            for i, row in enumerate(value):
+                print(f"    [{i}] {row}")
+        else:
+            print(f"  {key}: {value}")
 
 if __name__ == "__main__":
     main()

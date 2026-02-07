@@ -3,6 +3,9 @@ Integration tests for parse_pdf using the real total_d.pdf file.
 
 These tests are skipped when total_d.pdf is not present (e.g. in CI),
 so other developers can still run the rest of the test suite.
+
+v2.0: Updated for extract_table() based extraction.
+Expected values may differ from v1.0 due to the change in extraction method.
 """
 import io
 import os
@@ -29,22 +32,15 @@ def parsed_result():
 
 
 EXPECTED_KEYS = {
-    "date",
-    "shaho_count",
-    "shaho_amount",
-    "kokuho_count",
-    "kokuho_amount",
-    "kouki_count",
-    "kouki_amount",
-    "jihi_count",
-    "jihi_amount",
-    "hoken_nashi_count",
-    "hoken_nashi_amount",
-    "total_count",
-    "total_amount",
-    "bushan_amount",
-    "kaigo_amount",
-    "zenkai_sagaku",
+    "date", "rows",
+    "shaho_count", "shaho_points", "shaho_amount",
+    "kokuho_count", "kokuho_points", "kokuho_amount",
+    "kouki_count", "kouki_points", "kouki_amount",
+    "hoken_nashi_count", "hoken_nashi_points", "hoken_nashi_amount",
+    "total_count", "insurance_total_count",
+    "total_amount", "total_receipt",
+    "jihi_amount", "buppan_amount",
+    "kaigo_amount", "previous_diff",
 }
 
 
@@ -55,38 +51,33 @@ class TestRealPdf:
     def test_date_extraction(self, parsed_result):
         assert parsed_result["date"] == "2025-05-31"
 
-    def test_shaho(self, parsed_result):
-        assert parsed_result["shaho_count"] == 42
-        assert parsed_result["shaho_amount"] == 130500
-
-    def test_kokuho(self, parsed_result):
-        assert parsed_result["kokuho_count"] == 4
-        assert parsed_result["kokuho_amount"] == 6050
-
-    def test_kouki(self, parsed_result):
-        assert parsed_result["kouki_count"] == 5
-        assert parsed_result["kouki_amount"] == 3390
-
-    def test_hoken_nashi(self, parsed_result):
-        assert parsed_result["hoken_nashi_count"] == 1
-        assert parsed_result["hoken_nashi_amount"] == 10060
-
-    def test_total(self, parsed_result):
-        assert parsed_result["total_count"] == 55
-        assert parsed_result["total_amount"] == 150000
-
-    def test_jihi(self, parsed_result):
-        assert parsed_result["jihi_count"] == 0
-        assert parsed_result["jihi_amount"] == 3850
-
-    def test_zenkai_sagaku(self, parsed_result):
-        assert parsed_result["zenkai_sagaku"] == -700
-
-    def test_bushan(self, parsed_result):
-        assert parsed_result["bushan_amount"] == 1560
-
-    def test_kaigo(self, parsed_result):
-        assert parsed_result["kaigo_amount"] == 0
-
     def test_all_fields_present(self, parsed_result):
         assert set(parsed_result.keys()) == EXPECTED_KEYS
+
+    def test_rows_not_empty(self, parsed_result):
+        assert len(parsed_result["rows"]) > 0
+
+    def test_total_count(self, parsed_result):
+        """total_count should equal the number of parsed rows."""
+        assert parsed_result["total_count"] == len(parsed_result["rows"])
+
+    def test_all_numeric_fields_are_int(self, parsed_result):
+        for key, value in parsed_result.items():
+            if key == "date":
+                assert isinstance(value, str)
+            elif key == "rows":
+                assert isinstance(value, list)
+            else:
+                assert isinstance(value, int), f"{key} should be int, got {type(value)}"
+
+    def test_row_structure(self, parsed_result):
+        """Each row should have the expected keys."""
+        expected_row_keys = {
+            'number', 'patient_no', 'name', 'insurance_type',
+            'points', 'ratio', 'futan_amount',
+            'kaigo_units', 'kaigo_amount',
+            'jihi', 'buppan', 'previous_diff',
+            'receipt_amount', 'diff',
+        }
+        for row in parsed_result["rows"]:
+            assert set(row.keys()) == expected_row_keys

@@ -1173,14 +1173,14 @@
                 document.getElementById('bushanNote').value = data.bushan_note;
                 logDebug(`物販備考: ${data.bushan_note}`);
             }
-            if (data.bushan_amount) {
-                document.getElementById('bushanIncome').value = cleanNumericValue(data.bushan_amount);
-                logDebug(`物販金額: ${data.bushan_amount} → ${cleanNumericValue(data.bushan_amount)}`);
+            if (data.buppan_amount) {
+                document.getElementById('bushanIncome').value = cleanNumericValue(data.buppan_amount);
+                logDebug(`物販金額: ${data.buppan_amount} → ${cleanNumericValue(data.buppan_amount)}`);
             }
 
             // 前回差額（符号を含む）
-            if (data.previous_difference) {
-                const diffStr = data.previous_difference.toString();
+            if (data.previous_diff !== undefined && data.previous_diff !== null && data.previous_diff !== 0) {
+                const diffStr = data.previous_diff.toString();
 
                 if (diffStr.startsWith('-')) {
                     previousDifferenceSign = '-';
@@ -1264,7 +1264,7 @@
                                Number(cleanNumericValue(data.kouki_amount || '0')) +
                                Number(cleanNumericValue(data.jihi_amount || '0')) +
                                Number(cleanNumericValue(data.hoken_nashi_amount || '0')) +
-                               Number(cleanNumericValue(data.bushan_amount || '0'));
+                               Number(cleanNumericValue(data.buppan_amount || '0'));
 
             const totalPatients = Number(cleanNumericValue(data.shaho_count || '0')) +
                                  Number(cleanNumericValue(data.kokuho_count || '0')) +
