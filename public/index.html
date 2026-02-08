@@ -1210,6 +1210,7 @@
             }
 
             // 当日差額（符号を含む）
+            // 注：差額がプラス = 未収金 = 現金としてはマイナスなので、符号を反転させる
             if (data.today_difference !== undefined && data.today_difference !== null) {
                 const diffStr = data.today_difference.toString();
 
@@ -1218,21 +1219,28 @@
                 if (diffStr === '' || diffStr === 'null' || diffStr === 'undefined') {
                     logDebug('当日差額: 空文字またはnull → スキップ');
                 } else {
+                    // 符号を反転させる（プラスの差額は未収金なのでマイナス表示）
                     if (diffStr.startsWith('-')) {
-                        todayDifferenceSign = '-';
+                        todayDifferenceSign = '+';  // 反転: 元がマイナス → プラス表示
                         const cleanValue = cleanNumericValue(diffStr.substring(1));
                         document.getElementById('todayDifference').value = cleanValue;
-                        logDebug(`当日差額: ${diffStr} → 符号: ${todayDifferenceSign}, 値: ${cleanValue}`);
+                        logDebug(`当日差額: ${diffStr} → 符号反転 → 符号: ${todayDifferenceSign}, 値: ${cleanValue}`);
                     } else if (diffStr.startsWith('+')) {
-                        todayDifferenceSign = '+';
+                        todayDifferenceSign = '-';  // 反転: 元がプラス → マイナス表示
                         const cleanValue = cleanNumericValue(diffStr.substring(1));
                         document.getElementById('todayDifference').value = cleanValue;
-                        logDebug(`当日差額: ${diffStr} → 符号: ${todayDifferenceSign}, 値: ${cleanValue}`);
+                        logDebug(`当日差額: ${diffStr} → 符号反転 → 符号: ${todayDifferenceSign}, 値: ${cleanValue}`);
                     } else {
-                        todayDifferenceSign = '+';
-                        const cleanValue = cleanNumericValue(diffStr);
+                        // 符号なしの場合、値をチェック
+                        const numValue = parseFloat(diffStr);
+                        if (numValue >= 0) {
+                            todayDifferenceSign = '-';  // 反転: 正の値 → マイナス表示（未収金）
+                        } else {
+                            todayDifferenceSign = '+';  // 反転: 負の値 → プラス表示（過剰入金）
+                        }
+                        const cleanValue = cleanNumericValue(Math.abs(numValue).toString());
                         document.getElementById('todayDifference').value = cleanValue;
-                        logDebug(`当日差額: ${diffStr} → 符号: ${todayDifferenceSign}, 値: ${cleanValue} (符号なし、正として処理)`);
+                        logDebug(`当日差額: ${diffStr} → 符号反転 → 符号: ${todayDifferenceSign}, 値: ${cleanValue}`);
                     }
 
                     const todaySignBtn = document.getElementById('todaySignBtn');

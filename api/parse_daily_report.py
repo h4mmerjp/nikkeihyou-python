@@ -4,13 +4,25 @@ import json
 import io
 import re
 import os
-import cgi
 from datetime import datetime
 from notion_client import Client
 
 from utils.notion_uploader import upload_file_to_notion
 
-notion = Client(auth=os.environ["NOTION_TOKEN"])
+try:
+    from multipart import parse_form_data
+    HAS_MULTIPART = True
+except ImportError:
+    # フォールバック: 古いcgiモジュール（Python 3.12以前）
+    try:
+        import cgi
+        HAS_CGI = True
+        HAS_MULTIPART = False
+    except ImportError:
+        HAS_CGI = False
+        HAS_MULTIPART = False
+
+notion = Client(auth=os.environ["NOTION_TOKEN"], notion_version="2025-05-20")
 DATABASE_ID = os.environ["NOTION_DATABASE_ID"]
 
 
@@ -28,23 +40,48 @@ class handler(BaseHTTPRequestHandler):
             content_length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(content_length)
 
-            environ = {
-                "REQUEST_METHOD": "POST",
-                "CONTENT_TYPE": content_type,
-                "CONTENT_LENGTH": str(content_length),
-            }
-            fs = cgi.FieldStorage(
-                fp=io.BytesIO(body),
-                environ=environ,
-                keep_blank_values=True,
-            )
+            if HAS_MULTIPART:
+                # python-multipart を使用（Python 3.13+）
+                environ = {
+                    "REQUEST_METHOD": "POST",
+                    "CONTENT_TYPE": content_type,
+                    "CONTENT_LENGTH": str(content_length),
+                }
+                fields, files = parse_form_data(environ, io.BytesIO(body))
 
-            file_item = fs["file"]
-            if file_item.file is None:
-                self._send_json(400, {"success": False, "error": "No file uploaded"})
+                if "file" not in files:
+                    self._send_json(400, {"success": False, "error": "No file uploaded"})
+                    return
+
+                file_item = files["file"]
+                pdf_bytes = file_item.raw
+
+            elif HAS_CGI:
+                # 古いcgiモジュールを使用（Python 3.12以前）
+                environ = {
+                    "REQUEST_METHOD": "POST",
+                    "CONTENT_TYPE": content_type,
+                    "CONTENT_LENGTH": str(content_length),
+                }
+                fs = cgi.FieldStorage(
+                    fp=io.BytesIO(body),
+                    environ=environ,
+                    keep_blank_values=True,
+                )
+
+                file_item = fs["file"]
+                if file_item.file is None:
+                    self._send_json(400, {"success": False, "error": "No file uploaded"})
+                    return
+
+                pdf_bytes = file_item.file.read()
+
+            else:
+                self._send_json(500, {
+                    "success": False,
+                    "error": "No multipart parser available. Install python-multipart: pip install python-multipart"
+                })
                 return
-
-            pdf_bytes = file_item.file.read()
 
             # 1. PDF 解析
             parsed_data = parse_pdf(io.BytesIO(pdf_bytes))
@@ -53,9 +90,18 @@ class handler(BaseHTTPRequestHandler):
             notion_page_id = save_to_notion(pdf_bytes, parsed_data["summary"])
 
             # 3. レスポンス（個別データと集計データの両方を返す）
+            # フロントエンドが期待する "data" キーに summary を格納し、
+            # previous_difference フィールドも追加
+            # 当日差額 = 個別患者の差額の合計
+            today_difference = sum(patient.get("sagaku", 0) for patient in parsed_data["patients"])
+
             result = {
                 "success": True,
-                "summary": parsed_data["summary"],
+                "data": {
+                    **parsed_data["summary"],
+                    "previous_difference": parsed_data["summary"].get("zenkai_sagaku", 0),
+                    "today_difference": today_difference,
+                },
                 "patients": parsed_data["patients"],
                 "notion_page_id": notion_page_id,
             }
