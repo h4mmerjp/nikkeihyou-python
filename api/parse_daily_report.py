@@ -6,6 +6,10 @@ import re
 import os
 from datetime import datetime
 from notion_client import Client
+from dotenv import load_dotenv
+
+# .envファイルを読み込む
+load_dotenv()
 
 from utils.notion_uploader import upload_file_to_notion
 
@@ -22,8 +26,9 @@ except ImportError:
         HAS_CGI = False
         HAS_MULTIPART = False
 
-notion = Client(auth=os.environ["NOTION_TOKEN"], notion_version="2025-05-20")
+notion = Client(auth=os.environ["NOTION_TOKEN"], notion_version="2025-09-03")
 DATABASE_ID = os.environ["NOTION_DATABASE_ID"]
+DATA_SOURCE_ID = os.environ.get("NOTION_DATA_SOURCE_ID", DATABASE_ID)  # フォールバック
 
 
 class handler(BaseHTTPRequestHandler):
@@ -86,15 +91,18 @@ class handler(BaseHTTPRequestHandler):
             # 1. PDF 解析
             parsed_data = parse_pdf(io.BytesIO(pdf_bytes))
 
-            # 2. Notion に保存
-            notion_page_id = save_to_notion(pdf_bytes, parsed_data["summary"])
-
-            # 3. レスポンス（個別データと集計データの両方を返す）
-            # フロントエンドが期待する "data" キーに summary を格納し、
-            # previous_difference フィールドも追加
-            # 当日差額 = 個別患者の差額の合計
+            # 2. 当日差額を計算
             today_difference = sum(patient.get("sagaku", 0) for patient in parsed_data["patients"])
 
+            # 3. Notion に保存（PDFバイト、集計データ、個別患者データ、当日差額を渡す）
+            notion_page_id = save_to_notion(
+                pdf_bytes,
+                parsed_data["summary"],
+                parsed_data["patients"],
+                today_difference
+            )
+
+            # 4. レスポンス（個別データと集計データの両方を返す）
             result = {
                 "success": True,
                 "data": {
@@ -359,63 +367,349 @@ def parse_patient_row(row):
 # ====================
 # Notion 保存
 # ====================
-def save_to_notion(pdf_bytes, summary):
-    """Notion に PDF & 集計データを保存"""
+def save_to_notion(pdf_bytes, summary, patients, today_difference):
+    """Notion に PDF、集計データ、個別患者データをすべて保存"""
 
-    # 1. PDF アップロード
-    pdf_filename = f"日計表_{summary['date']}.pdf"
-    file_upload_id = upload_file_to_notion(pdf_bytes, pdf_filename, "application/pdf")
+    try:
+        # 1. PDF アップロード
+        pdf_filename = f"日計表_{summary['date']}.pdf"
+        print(f"[DEBUG] Uploading PDF: {pdf_filename}")
+        file_upload_id = upload_file_to_notion(pdf_bytes, pdf_filename, "application/pdf")
+        print(f"[DEBUG] PDF uploaded successfully. File ID: {file_upload_id}")
+    except Exception as e:
+        print(f"[ERROR] PDF upload failed: {str(e)}")
+        raise Exception(f"PDF upload failed: {str(e)}")
 
-    # 2. ページ作成
-    page = notion.pages.create(
-        parent={"database_id": DATABASE_ID},
-        properties={
-            "日付": {"date": {"start": summary["date"]}},
-            "社保人数": {"number": summary["shaho_count"]},
-            "社保金額": {"number": summary["shaho_amount"]},
-            "国保人数": {"number": summary["kokuho_count"]},
-            "国保金額": {"number": summary["kokuho_amount"]},
-            "後期人数": {"number": summary["kouki_count"]},
-            "後期金額": {"number": summary["kouki_amount"]},
-            "自費人数": {"number": summary["jihi_count"]},
-            "自費金額": {"number": summary["jihi_amount"]},
-            "保険なし人数": {"number": summary["hoken_nashi_count"]},
-            "保険なし金額": {"number": summary["hoken_nashi_amount"]},
-            "合計人数": {"number": summary["total_count"]},
-            "合計金額": {"number": summary["total_amount"]},
-            "物販": {"number": summary["bushan_amount"]},
-            "介護": {"number": summary["kaigo_amount"]},
-            "前回差額": {"number": summary["zenkai_sagaku"]},
-            "照合状態": {"select": {"name": "未照合"}},
+    # 2. ページ作成（データベースプロパティ）
+    try:
+        print(f"[DEBUG] Creating Notion page with database ID: {DATABASE_ID}")
+        print(f"[DEBUG] Page properties: タイトル={summary['date']} 日計表, 日付={summary['date']}")
+
+        page = notion.pages.create(
+            parent={"type": "data_source_id", "data_source_id": DATA_SOURCE_ID},
+            properties={
+                "タイトル": {"title": [{"text": {"content": f"{summary['date']} 日計表"}}]},
+                "日付": {"date": {"start": summary["date"]}},
+                "社保人数": {"number": summary["shaho_count"]},
+                "社保金額": {"number": summary["shaho_amount"]},
+                "国保人数": {"number": summary["kokuho_count"]},
+                "国保金額": {"number": summary["kokuho_amount"]},
+                "後期人数": {"number": summary["kouki_count"]},
+                "後期金額": {"number": summary["kouki_amount"]},
+                "自費人数": {"number": summary["jihi_count"]},
+                "自費金額": {"number": summary["jihi_amount"]},
+                "保険なし人数": {"number": summary["hoken_nashi_count"]},
+                "保険なし金額": {"number": summary["hoken_nashi_amount"]},
+                "合計人数": {"number": summary["total_count"]},
+                "合計金額": {"number": summary["total_amount"]},
+                "物販": {"number": summary["bushan_amount"]},
+                "介護": {"number": summary["kaigo_amount"]},
+                "前回差額": {"number": summary["zenkai_sagaku"]},
+                "当日差額": {"number": today_difference},
+                "PDF": {
+                    "files": [
+                        {
+                            "type": "file_upload",
+                            "file_upload": {"id": file_upload_id},
+                            "name": pdf_filename,
+                        }
+                    ]
+                },
+                "照合状態": {"select": {"name": "未照合"}},
+            },
+        )
+        page_id = page["id"]
+        print(f"[DEBUG] Notion page created successfully. Page ID: {page_id}")
+    except Exception as e:
+        print(f"[ERROR] Notion page creation failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise Exception(f"Notion page creation failed: {str(e)}")
+
+    # 3. ページ内にすべてのデータを保存
+    blocks = []
+
+    # 3-1. 集計データサマリー
+    blocks.extend([
+        {
+            "object": "block",
+            "type": "heading_1",
+            "heading_1": {
+                "rich_text": [{"type": "text", "text": {"content": "📊 集計データ"}}]
+            },
         },
-    )
-    page_id = page["id"]
+        {
+            "object": "block",
+            "type": "paragraph",
+            "paragraph": {
+                "rich_text": [
+                    {"type": "text", "text": {"content": f"日付: {summary['date']}\n"}},
+                    {"type": "text", "text": {"content": f"合計人数: {summary['total_count']}人\n"}},
+                    {"type": "text", "text": {"content": f"合計金額: ¥{summary['total_amount']:,}\n"}},
+                    {"type": "text", "text": {"content": f"前回差額: ¥{summary['zenkai_sagaku']:,}\n"}},
+                    {"type": "text", "text": {"content": f"当日差額: ¥{today_difference:,}\n"}},
+                    {"type": "text", "text": {"content": f"物販: ¥{summary['bushan_amount']:,}\n"}},
+                    {"type": "text", "text": {"content": f"介護: ¥{summary['kaigo_amount']:,}"}},
+                ]
+            },
+        },
+        {
+            "object": "block",
+            "type": "heading_2",
+            "heading_2": {
+                "rich_text": [{"type": "text", "text": {"content": "保険種別内訳"}}]
+            },
+        },
+        {
+            "object": "block",
+            "type": "table",
+            "table": {
+                "table_width": 3,
+                "has_column_header": True,
+                "children": [
+                    {
+                        "type": "table_row",
+                        "table_row": {
+                            "cells": [
+                                [{"type": "text", "text": {"content": "保険種別"}}],
+                                [{"type": "text", "text": {"content": "人数"}}],
+                                [{"type": "text", "text": {"content": "金額"}}],
+                            ]
+                        },
+                    },
+                    {
+                        "type": "table_row",
+                        "table_row": {
+                            "cells": [
+                                [{"type": "text", "text": {"content": "社保"}}],
+                                [{"type": "text", "text": {"content": f"{summary['shaho_count']}人"}}],
+                                [{"type": "text", "text": {"content": f"¥{summary['shaho_amount']:,}"}}],
+                            ]
+                        },
+                    },
+                    {
+                        "type": "table_row",
+                        "table_row": {
+                            "cells": [
+                                [{"type": "text", "text": {"content": "国保"}}],
+                                [{"type": "text", "text": {"content": f"{summary['kokuho_count']}人"}}],
+                                [{"type": "text", "text": {"content": f"¥{summary['kokuho_amount']:,}"}}],
+                            ]
+                        },
+                    },
+                    {
+                        "type": "table_row",
+                        "table_row": {
+                            "cells": [
+                                [{"type": "text", "text": {"content": "後期"}}],
+                                [{"type": "text", "text": {"content": f"{summary['kouki_count']}人"}}],
+                                [{"type": "text", "text": {"content": f"¥{summary['kouki_amount']:,}"}}],
+                            ]
+                        },
+                    },
+                    {
+                        "type": "table_row",
+                        "table_row": {
+                            "cells": [
+                                [{"type": "text", "text": {"content": "自費"}}],
+                                [{"type": "text", "text": {"content": f"{summary['jihi_count']}人"}}],
+                                [{"type": "text", "text": {"content": f"¥{summary['jihi_amount']:,}"}}],
+                            ]
+                        },
+                    },
+                    {
+                        "type": "table_row",
+                        "table_row": {
+                            "cells": [
+                                [{"type": "text", "text": {"content": "保険なし"}}],
+                                [{"type": "text", "text": {"content": f"{summary['hoken_nashi_count']}人"}}],
+                                [{"type": "text", "text": {"content": f"¥{summary['hoken_nashi_amount']:,}"}}],
+                            ]
+                        },
+                    },
+                ]
+            },
+        },
+    ])
 
-    # 3. PDF をページ内ブロックとして添付
-    notion.blocks.children.append(
-        block_id=page_id,
-        children=[
+    # 3-2. 個別患者データテーブル
+    blocks.extend([
+        {
+            "object": "block",
+            "type": "heading_1",
+            "heading_1": {
+                "rich_text": [{"type": "text", "text": {"content": f"👥 個別患者データ ({len(patients)}件)"}}]
+            },
+        },
+    ])
+
+    # 患者データを10件ずつに分割（Notionのテーブル行数制限対策）
+    chunk_size = 10
+    for i in range(0, len(patients), chunk_size):
+        patient_chunk = patients[i:i+chunk_size]
+
+        # テーブルヘッダー
+        table_children = [
+            {
+                "type": "table_row",
+                "table_row": {
+                    "cells": [
+                        [{"type": "text", "text": {"content": "No"}}],
+                        [{"type": "text", "text": {"content": "患者ID"}}],
+                        [{"type": "text", "text": {"content": "氏名"}}],
+                        [{"type": "text", "text": {"content": "保険種別"}}],
+                        [{"type": "text", "text": {"content": "点数"}}],
+                        [{"type": "text", "text": {"content": "負担額"}}],
+                        [{"type": "text", "text": {"content": "領収額"}}],
+                    ]
+                },
+            }
+        ]
+
+        # データ行
+        for patient in patient_chunk:
+            table_children.append({
+                "type": "table_row",
+                "table_row": {
+                    "cells": [
+                        [{"type": "text", "text": {"content": str(patient["number"])}}],
+                        [{"type": "text", "text": {"content": patient["patient_id"]}}],
+                        [{"type": "text", "text": {"content": patient["name"]}}],
+                        [{"type": "text", "text": {"content": patient["insurance_type"]}}],
+                        [{"type": "text", "text": {"content": str(patient["points"])}}],
+                        [{"type": "text", "text": {"content": f"¥{patient['burden_amount']:,}"}}],
+                        [{"type": "text", "text": {"content": f"¥{patient['receipt_amount']:,}"}}],
+                    ]
+                },
+            })
+
+        blocks.append({
+            "object": "block",
+            "type": "table",
+            "table": {
+                "table_width": 7,
+                "has_column_header": True,
+                "children": table_children,
+            },
+        })
+
+    # 3-3. 詳細データ（差額や物販などがある患者のみ）
+    patients_with_details = [
+        p for p in patients
+        if p.get("zenkai_sagaku", 0) != 0
+        or p.get("sagaku", 0) != 0
+        or p.get("jihi", 0) != 0
+        or p.get("bushan", 0) != 0
+        or p.get("kaigo_units", 0) != 0
+    ]
+
+    if patients_with_details:
+        blocks.extend([
             {
                 "object": "block",
                 "type": "heading_2",
                 "heading_2": {
-                    "rich_text": [
-                        {"type": "text", "text": {"content": "📄 日計表PDF"}}
-                    ]
+                    "rich_text": [{"type": "text", "text": {"content": "💰 詳細データ（差額・自費・物販・介護あり）"}}]
                 },
             },
-            {
+        ])
+
+        for patient in patients_with_details:
+            blocks.append({
                 "object": "block",
-                "type": "file",
-                "file": {
-                    "type": "file_upload",
-                    "file_upload": {"id": file_upload_id},
-                    "caption": [
-                        {"type": "text", "text": {"content": "元の日計表"}}
+                "type": "table",
+                "table": {
+                    "table_width": 2,
+                    "has_column_header": False,
+                    "children": [
+                        {
+                            "type": "table_row",
+                            "table_row": {
+                                "cells": [
+                                    [{"type": "text", "text": {"content": f"{patient['number']}. {patient['name']}"}}],
+                                    [{"type": "text", "text": {"content": patient['patient_id']}}],
+                                ]
+                            },
+                        },
+                        {
+                            "type": "table_row",
+                            "table_row": {
+                                "cells": [
+                                    [{"type": "text", "text": {"content": "介護単位"}}],
+                                    [{"type": "text", "text": {"content": str(patient["kaigo_units"])}}],
+                                ]
+                            },
+                        },
+                        {
+                            "type": "table_row",
+                            "table_row": {
+                                "cells": [
+                                    [{"type": "text", "text": {"content": "介護負担"}}],
+                                    [{"type": "text", "text": {"content": f"¥{patient['kaigo_burden']:,}"}}],
+                                ]
+                            },
+                        },
+                        {
+                            "type": "table_row",
+                            "table_row": {
+                                "cells": [
+                                    [{"type": "text", "text": {"content": "自費"}}],
+                                    [{"type": "text", "text": {"content": f"¥{patient['jihi']:,}"}}],
+                                ]
+                            },
+                        },
+                        {
+                            "type": "table_row",
+                            "table_row": {
+                                "cells": [
+                                    [{"type": "text", "text": {"content": "物販"}}],
+                                    [{"type": "text", "text": {"content": f"¥{patient['bushan']:,}"}}],
+                                ]
+                            },
+                        },
+                        {
+                            "type": "table_row",
+                            "table_row": {
+                                "cells": [
+                                    [{"type": "text", "text": {"content": "前回差額"}}],
+                                    [{"type": "text", "text": {"content": f"¥{patient['zenkai_sagaku']:,}"}}],
+                                ]
+                            },
+                        },
+                        {
+                            "type": "table_row",
+                            "table_row": {
+                                "cells": [
+                                    [{"type": "text", "text": {"content": "差額"}}],
+                                    [{"type": "text", "text": {"content": f"¥{patient['sagaku']:,}"}}],
+                                ]
+                            },
+                        },
                     ],
                 },
+            })
+
+    # 3-4. 元のPDF
+    blocks.extend([
+        {
+            "object": "block",
+            "type": "heading_1",
+            "heading_1": {
+                "rich_text": [{"type": "text", "text": {"content": "📄 元の日計表PDF"}}]
             },
-        ],
-    )
+        },
+        {
+            "object": "block",
+            "type": "file",
+            "file": {
+                "type": "file_upload",
+                "file_upload": {"id": file_upload_id},
+                "caption": [{"type": "text", "text": {"content": "元の日計表"}}],
+            },
+        },
+    ])
+
+    # すべてのブロックを追加
+    notion.blocks.children.append(block_id=page_id, children=blocks)
 
     return page_id

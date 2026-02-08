@@ -4,7 +4,7 @@
   "description": "日計表PDF解析 & 照合システム（Vercel + pdfplumber + Notion API）",
   "private": true,
   "scripts": {
-    "dev": "vercel dev",
+    "start": "python test_server.py",
     "deploy": "vercel --prod"
   },
   "engines": {

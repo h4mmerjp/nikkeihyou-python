@@ -1,10 +1,14 @@
 import os
 import io
 import requests
+from dotenv import load_dotenv
+
+# .envファイルを読み込む
+load_dotenv()
 
 NOTION_TOKEN = os.environ["NOTION_TOKEN"]
 # File Upload API は 2025-05-20 以降のバージョンが必要
-NOTION_VERSION = "2025-05-20"
+NOTION_VERSION = "2025-09-03"
 
 
 def upload_file_to_notion(file_bytes: bytes, filename: str, content_type: str) -> str:

@@ -4,6 +4,10 @@ import json
 import os
 import base64
 from datetime import datetime
+from dotenv import load_dotenv
+
+# .envファイルを読み込む
+load_dotenv()
 
 from utils.notion_uploader import upload_file_to_notion
 
@@ -26,15 +30,22 @@ class handler(BaseHTTPRequestHandler):
             is_matched = body["is_matched"]
             cash_input = body["cash_input"]
             frontend_pdf_b64 = body["frontend_pdf_base64"]
+            date = body.get("date", "")  # 日付を取得（YYYY-MM-DD形式）
 
             # フロント画面 PDF をデコード
             frontend_pdf_bytes = base64.b64decode(frontend_pdf_b64)
 
-            # PDF アップロード
-            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            # PDF アップロード（日付ベースのファイル名）
+            if date:
+                frontend_filename = f"照合画面_{date}.pdf"
+            else:
+                # 日付がない場合はタイムスタンプを使用（フォールバック）
+                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                frontend_filename = f"照合画面_{ts}.pdf"
+
             frontend_file_id = upload_file_to_notion(
                 frontend_pdf_bytes,
-                f"照合画面_{ts}.pdf",
+                frontend_filename,
                 "application/pdf",
             )
 
@@ -47,6 +58,15 @@ class handler(BaseHTTPRequestHandler):
                     },
                     "入力金額": {"number": cash_input},
                     "照合日時": {"date": {"start": datetime.now().isoformat()}},
+                    "照合画面PDF": {
+                        "files": [
+                            {
+                                "type": "file_upload",
+                                "file_upload": {"id": frontend_file_id},
+                                "name": frontend_filename,
+                            }
+                        ]
+                    },
                 },
             )
 

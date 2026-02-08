@@ -962,8 +962,8 @@
         <!-- ボタンセクション -->
         <div class="buttons-section no-print">
             <button class="btn btn-clear" onclick="clearAll()">全クリア</button>
-            <button class="btn btn-print" onclick="printReport()">印刷 & Notion保存</button>
-            <button class="btn btn-export" onclick="exportData()">データエクスポート</button>
+            <button class="btn btn-print" onclick="printReport()">印刷</button>
+            <button class="btn btn-export" onclick="saveToNotion()">Notion保存</button>
         </div>
     </div>
 
@@ -1464,16 +1464,174 @@
         // フロント画面 → PDF
         async function captureFrontendAsPDF() {
             const element = document.getElementById('verification-page');
-            const canvas = await html2canvas(element, { scale: 2 });
+            // スケールを1に下げて、ファイルサイズを削減
+            const canvas = await html2canvas(element, { scale: 1 });
 
             const { jsPDF } = window.jspdf;
             const pdf = new jsPDF('l', 'mm', 'b5');
-            const imgData = canvas.toDataURL('image/png');
+            // JPEG形式（品質0.7）でファイルサイズを大幅に削減
+            const imgData = canvas.toDataURL('image/jpeg', 0.7);
             const pageWidth = pdf.internal.pageSize.getWidth();
             const pageHeight = pdf.internal.pageSize.getHeight();
-            pdf.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight);
+            pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
 
             return pdf.output('arraybuffer');
+        }
+
+        // 印刷レイアウト → PDF (デバッグ情報なし)
+        async function capturePrintLayoutAsPDF() {
+            // 一時的にno-print要素を非表示にする
+            const noPrintElements = document.querySelectorAll('.no-print');
+            noPrintElements.forEach(el => el.style.display = 'none');
+
+            // 印刷用日付表示を更新
+            updateDateDisplay();
+
+            // 印刷スタイルを一時的に適用（列幅を確保してoverflowを防ぐ）
+            const printStyleSheet = document.createElement('style');
+            printStyleSheet.id = 'temp-print-style';
+            printStyleSheet.textContent = `
+                th, td {
+                    padding: 5px 4px !important;
+                    font-size: 10px !important;
+                    line-height: 1.5 !important;
+                    word-wrap: break-word !important;
+                    overflow: visible !important;
+                    white-space: nowrap !important;
+                    border: 1px solid black !important;
+                    text-align: center !important;
+                    vertical-align: middle !important;
+                    font-family: 'MS Gothic', monospace !important;
+                    min-height: 24px !important;
+                    height: auto !important;
+                    box-sizing: border-box !important;
+                }
+                .compact-table {
+                    font-size: 10px !important;
+                    width: 100% !important;
+                    table-layout: auto !important;
+                    border-collapse: collapse !important;
+                }
+                .col-subject { min-width: 80px !important; }
+                .col-dest { min-width: 100px !important; }
+                .col-note { min-width: 80px !important; }
+                .col-value { min-width: 80px !important; }
+                .difference-btn-single {
+                    width: 25px !important;
+                    height: 22px !important;
+                    padding: 3px !important;
+                    font-size: 12px !important;
+                    display: inline-block !important;
+                    vertical-align: middle !important;
+                }
+                input.input-field {
+                    min-width: 50px !important;
+                    width: auto !important;
+                    font-size: 10px !important;
+                    line-height: 1.5 !important;
+                    padding: 2px 4px !important;
+                    vertical-align: middle !important;
+                }
+            `;
+            document.head.appendChild(printStyleSheet);
+
+            // レイアウトが安定するまで少し待機
+            await new Promise(resolve => setTimeout(resolve, 300));
+
+            try {
+                // verification-pageをキャプチャ（デバッグ情報が非表示になっている）
+                const element = document.getElementById('verification-page');
+
+                // 高解像度・高品質でキャプチャ
+                const canvas = await html2canvas(element, {
+                    scale: 2,              // 解像度を2倍に（より鮮明）
+                    useCORS: true,
+                    logging: false,
+                    backgroundColor: '#ffffff',
+                    windowHeight: element.scrollHeight,  // 全体の高さを確保
+                    height: element.scrollHeight,        // 要素全体をキャプチャ
+                    scrollY: -window.scrollY,            // スクロール位置を考慮
+                    scrollX: -window.scrollX
+                });
+
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('l', 'mm', 'b5');
+
+                // 高品質JPEG (0.95) でPDF生成
+                const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                const pageWidth = pdf.internal.pageSize.getWidth();
+                const pageHeight = pdf.internal.pageSize.getHeight();
+                pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
+
+                const pdfBuffer = pdf.output('arraybuffer');
+
+                // ファイルサイズをログ出力
+                const sizeMB = (pdfBuffer.byteLength / 1024 / 1024).toFixed(2);
+                logDebug(`印刷レイアウトPDF生成: ${sizeMB}MB`);
+
+                return pdfBuffer;
+            } finally {
+                // 一時的なスタイルを削除
+                const tempStyle = document.getElementById('temp-print-style');
+                if (tempStyle) tempStyle.remove();
+
+                // no-print要素を再表示
+                noPrintElements.forEach(el => el.style.display = '');
+            }
+        }
+
+        // Notion保存（印刷レイアウトを使用）
+        async function saveToNotion() {
+            if (!window.notionPageId) {
+                showMessage('Notion Page IDが見つかりません。先にPDFをアップロードしてください。');
+                logDebug('エラー: Notion Page ID not found');
+                return;
+            }
+
+            try {
+                // 照合状態を計算
+                const physicalBalance = parseInt(document.getElementById('totalBalance').textContent) || 0;
+                const calculatedBalance = parseInt(document.getElementById('finalBalance').textContent) || 0;
+                const isMatched = physicalBalance === calculatedBalance;
+
+                logDebug(`Notion保存開始: 一致=${isMatched}, 入力金額=${physicalBalance}`);
+
+                // 印刷レイアウトをPDFとしてキャプチャ
+                const pdfBuffer = await capturePrintLayoutAsPDF();
+                const uint8 = new Uint8Array(pdfBuffer);
+                let binary = '';
+                for (let i = 0; i < uint8.length; i++) {
+                    binary += String.fromCharCode(uint8[i]);
+                }
+                const base64 = btoa(binary);
+
+                // 日付を取得
+                const reportDate = document.getElementById('reportDate').value || '';
+
+                // Notionに送信
+                const response = await fetch('/api/update_verification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        notion_page_id: window.notionPageId,
+                        is_matched: isMatched,
+                        cash_input: physicalBalance,
+                        frontend_pdf_base64: base64,
+                        date: reportDate,
+                    }),
+                });
+
+                if (response.ok) {
+                    showMessage('Notionに照合結果を保存しました（印刷レイアウト）');
+                    logDebug('Notion照合結果更新完了');
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                console.error('Notion save error:', error);
+                showMessage('Notion保存に失敗しました');
+                logDebug(`Notion保存エラー: ${error.message}`);
+            }
         }
 
         // Notion 照合結果更新
@@ -1489,6 +1647,9 @@
                 }
                 const base64 = btoa(binary);
 
+                // 日付を取得
+                const reportDate = document.getElementById('reportDate').value || '';
+
                 await fetch('/api/update_verification', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1497,6 +1658,7 @@
                         is_matched: isMatched,
                         cash_input: cashInput,
                         frontend_pdf_base64: base64,
+                        date: reportDate,
                     }),
                 });
                 showMessage('Notionに照合結果を保存しました');
@@ -1554,15 +1716,8 @@
             document.getElementById('confirmModal').classList.add('hidden');
         }
 
-        // 印刷 & Notion保存
+        // 印刷
         function printReport() {
-            // Notion照合結果を保存
-            const physicalBalance = parseInt(document.getElementById('totalBalance').textContent) || 0;
-            const calculatedBalance = parseInt(document.getElementById('finalBalance').textContent) || 0;
-            const isMatched = physicalBalance === calculatedBalance;
-
-            updateNotionWithVerification(isMatched, physicalBalance);
-
             // 印刷前にブラウザ設定のガイダンスを表示
             if (navigator.userAgent.includes('iPad') || navigator.userAgent.includes('iPhone')) {
                 setTimeout(() => {
