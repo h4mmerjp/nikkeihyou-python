@@ -4,8 +4,14 @@ import json
 import io
 import re
 import os
+import sys
 from datetime import datetime
 from notion_client import Client
+
+# Vercel環境でutilsディレクトリをパスに追加
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
 
 # .envファイルを読み込む（ローカル開発時のみ）
 try:

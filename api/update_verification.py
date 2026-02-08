@@ -2,8 +2,14 @@ from http.server import BaseHTTPRequestHandler
 from notion_client import Client
 import json
 import os
+import sys
 import base64
 from datetime import datetime
+
+# Vercel環境でutilsディレクトリをパスに追加
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
 
 # .envファイルを読み込む（ローカル開発時のみ）
 try:
