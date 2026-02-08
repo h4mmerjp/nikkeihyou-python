@@ -4,10 +4,14 @@ import json
 import os
 import base64
 from datetime import datetime
-from dotenv import load_dotenv
 
-# .envファイルを読み込む
-load_dotenv()
+# .envファイルを読み込む（ローカル開発時のみ）
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # Vercel環境では不要（環境変数は自動的に設定される）
+    pass
 
 from utils.notion_uploader import upload_file_to_notion
 

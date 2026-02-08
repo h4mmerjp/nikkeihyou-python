@@ -1,10 +1,14 @@
 import os
 import io
 import requests
-from dotenv import load_dotenv
 
-# .envファイルを読み込む
-load_dotenv()
+# .envファイルを読み込む（ローカル開発時のみ）
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # Vercel環境では不要（環境変数は自動的に設定される）
+    pass
 
 NOTION_TOKEN = os.environ["NOTION_TOKEN"]
 # File Upload API は 2025-05-20 以降のバージョンが必要
