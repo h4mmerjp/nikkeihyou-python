@@ -1608,6 +1608,9 @@
                 // 日付を取得
                 const reportDate = document.getElementById('reportDate').value || '';
 
+                // 院長へ金額を取得
+                const expenseDirector = parseInt(document.getElementById('expenseDirector').value) || 0;
+
                 // Notionに送信
                 const response = await fetch('/api/update_verification', {
                     method: 'POST',
@@ -1618,6 +1621,7 @@
                         cash_input: physicalBalance,
                         frontend_pdf_base64: base64,
                         date: reportDate,
+                        expense_director: expenseDirector,
                     }),
                 });
 

@@ -41,6 +41,7 @@ class handler(BaseHTTPRequestHandler):
             cash_input = body["cash_input"]
             frontend_pdf_b64 = body["frontend_pdf_base64"]
             date = body.get("date", "")  # 日付を取得（YYYY-MM-DD形式）
+            expense_director = body.get("expense_director", 0)  # 院長へ金額
 
             # フロント画面 PDF をデコード
             frontend_pdf_bytes = base64.b64decode(frontend_pdf_b64)
@@ -67,6 +68,7 @@ class handler(BaseHTTPRequestHandler):
                         "select": {"name": "一致" if is_matched else "不一致"}
                     },
                     "入力金額": {"number": cash_input},
+                    "院長へ": {"number": expense_director},
                     "照合日時": {"date": {"start": datetime.now().isoformat()}},
                     "照合画面PDF": {
                         "files": [
