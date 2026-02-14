@@ -972,6 +972,7 @@
         let todayDifferenceSign = '+';
         let selectedFile = null;
         window.notionPageId = null;
+        window.notionAutoSent = false;
 
         // 初期化
         document.addEventListener('DOMContentLoaded', function() {
@@ -1081,6 +1082,7 @@
                 if (result.success && result.data) {
                     populateFormWithExtractedData(result.data);
                     window.notionPageId = result.notion_page_id;
+                    window.notionAutoSent = false;
 
                     fileStatus.textContent = 'データ抽出 & Notion保存完了！';
                     fileStatus.className = 'file-status success';
@@ -1455,6 +1457,13 @@
             if (difference === 0) {
                 balanceCheck.textContent = `残高チェック: 一致しています (${physicalBalance.toLocaleString()}円)`;
                 balanceCheck.className = 'balance-check match no-print';
+
+                // 一致時に自動でNotionへ送信（条件: PDFアップロード済み、未送信、金額が0でない）
+                if (window.notionPageId && !window.notionAutoSent && physicalBalance !== 0) {
+                    window.notionAutoSent = true;
+                    logDebug('残高一致を検出: Notionへ自動送信を開始します');
+                    saveToNotion();
+                }
             } else {
                 balanceCheck.textContent = `残高チェック: 差額 ${difference.toLocaleString()}円 (実物: ${physicalBalance.toLocaleString()}円 / 計算: ${calculatedBalance.toLocaleString()}円)`;
                 balanceCheck.className = 'balance-check no-print';
@@ -1690,6 +1699,7 @@
             document.getElementById('pdfFile').value = '';
             selectedFile = null;
             window.notionPageId = null;
+            window.notionAutoSent = false;
             document.getElementById('uploadBtn').disabled = true;
             document.getElementById('fileStatus').textContent = 'PDFファイルを選択してください';
             document.getElementById('fileStatus').className = 'file-status';
