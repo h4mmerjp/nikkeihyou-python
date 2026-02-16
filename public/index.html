@@ -138,15 +138,8 @@
                 display: none !important;
             }
 
-            .balance-check {
-                background-color: #ffffcc !important;
-                border: 2px solid #ff0000 !important;
-                font-weight: bold !important;
-            }
-
-            .balance-check.match {
-                background-color: #ccffcc !important;
-                border-color: #00aa00 !important;
+            .verify-section {
+                display: none !important;
             }
 
             .print-sign {
@@ -557,19 +550,48 @@
             opacity: 0.8;
         }
 
-        .balance-check {
-            background-color: #ffffcc;
-            border: 2px solid #ff0000;
-            font-weight: bold;
-            padding: 8px;
-            text-align: center;
+        .verify-section {
+            display: flex;
+            align-items: center;
+            gap: 10px;
             margin: 10px 0;
-            border-radius: 5px;
         }
 
-        .balance-check.match {
+        .btn-verify {
+            background-color: #4488ff;
+            color: white;
+            border: 2px solid #2266cc;
+            padding: 8px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            font-family: monospace;
+            border-radius: 5px;
+            white-space: nowrap;
+        }
+
+        .btn-verify:hover {
+            background-color: #2266cc;
+        }
+
+        .balance-check-inline {
+            background-color: #f0f0f0;
+            border: 2px solid #cccccc;
+            font-weight: bold;
+            padding: 8px 12px;
+            border-radius: 5px;
+            flex: 1;
+            text-align: center;
+        }
+
+        .balance-check-inline.match {
             background-color: #ccffcc;
             border-color: #00aa00;
+        }
+
+        .balance-check-inline.mismatch {
+            background-color: #ffffcc;
+            border-color: #ff0000;
         }
 
         .print-sign {
@@ -649,9 +671,10 @@
             <button class="debug-clear-btn" onclick="clearDebugInfo()">クリア</button>
         </div>
 
-        <!-- 残高チェック表示 -->
-        <div class="balance-check no-print" id="balanceCheck">
-            残高チェック: 計算中...
+        <!-- 判定ボタン＆残高チェック表示 -->
+        <div class="verify-section no-print">
+            <button class="btn btn-verify" onclick="verifyBalance()">判定</button>
+            <div class="balance-check-inline" id="balanceCheck">判定ボタンを押してください</div>
         </div>
 
         <!-- 確認ダイアログ -->
@@ -1445,28 +1468,30 @@
             const finalBalance = previousBalance + incomeTotal - expenseTotal;
             document.getElementById('finalBalance').textContent = finalBalance;
 
-            // 残高チェック
-            updateBalanceCheck(totalBalance, finalBalance);
         }
 
-        // 残高チェック機能
-        function updateBalanceCheck(physicalBalance, calculatedBalance) {
+        // 判定ボタンで残高チェック＆一致時にNotion自動送信
+        function verifyBalance() {
             const balanceCheck = document.getElementById('balanceCheck');
+            const physicalBalance = parseInt(document.getElementById('totalBalance').textContent) || 0;
+            const calculatedBalance = parseInt(document.getElementById('finalBalance').textContent) || 0;
             const difference = physicalBalance - calculatedBalance;
 
-            if (difference === 0) {
-                balanceCheck.textContent = `残高チェック: 一致しています (${physicalBalance.toLocaleString()}円)`;
-                balanceCheck.className = 'balance-check match no-print';
+            if (difference === 0 && physicalBalance !== 0) {
+                balanceCheck.textContent = `一致しています (${physicalBalance.toLocaleString()}円)`;
+                balanceCheck.className = 'balance-check-inline match';
 
-                // 一致時に自動でNotionへ送信（条件: PDFアップロード済み、未送信、金額が0でない）
-                if (window.notionPageId && !window.notionAutoSent && physicalBalance !== 0) {
+                // 一致 → 自動でNotionへ送信
+                if (window.notionPageId && !window.notionAutoSent) {
                     window.notionAutoSent = true;
-                    logDebug('残高一致を検出: Notionへ自動送信を開始します');
+                    logDebug('残高一致を確認: Notionへ自動送信を開始します');
                     saveToNotion();
+                } else if (!window.notionPageId) {
+                    showMessage('一致していますが、PDFが未アップロードのためNotion送信できません');
                 }
             } else {
-                balanceCheck.textContent = `残高チェック: 差額 ${difference.toLocaleString()}円 (実物: ${physicalBalance.toLocaleString()}円 / 計算: ${calculatedBalance.toLocaleString()}円)`;
-                balanceCheck.className = 'balance-check no-print';
+                balanceCheck.textContent = `不一致: 差額 ${difference.toLocaleString()}円 (実物: ${physicalBalance.toLocaleString()}円 / 計算: ${calculatedBalance.toLocaleString()}円)`;
+                balanceCheck.className = 'balance-check-inline mismatch';
             }
         }
 
@@ -1719,6 +1744,11 @@
             todaySignBtn.classList.add('positive');
 
             updatePrintSigns();
+
+            // 判定結果をリセット
+            const balanceCheck = document.getElementById('balanceCheck');
+            balanceCheck.textContent = '判定ボタンを押してください';
+            balanceCheck.className = 'balance-check-inline';
 
             document.getElementById('confirmModal').classList.add('hidden');
             updateCalculations();
