@@ -1087,6 +1087,12 @@
                 const formData = new FormData();
                 formData.append('file', selectedFile);
 
+                // 既存のNotionページがある場合、再アップロード（既存ページを更新）
+                if (window.notionPageId) {
+                    formData.append('existing_page_id', window.notionPageId);
+                    logDebug(`既存Notionページを更新: ${window.notionPageId}`);
+                }
+
                 logDebug(`リクエスト送信: ${selectedFile.name}`);
 
                 const response = await fetch('/api/parse_daily_report', {
@@ -1103,15 +1109,26 @@
                 }
 
                 if (result.success && result.data) {
+                    const isReupload = result.updated_existing === true;
                     populateFormWithExtractedData(result.data);
                     window.notionPageId = result.notion_page_id;
                     window.notionAutoSent = false;
 
-                    fileStatus.textContent = 'データ抽出 & Notion保存完了！';
+                    // 判定結果をリセット
+                    const balanceCheck = document.getElementById('balanceCheck');
+                    balanceCheck.textContent = '判定ボタンを押してください';
+                    balanceCheck.className = 'balance-check-inline';
+
+                    if (isReupload) {
+                        fileStatus.textContent = 'データ抽出 & Notionページ更新完了！';
+                        showMessage('PDFからデータを再抽出してNotionページを更新しました！（現金種は保持）');
+                    } else {
+                        fileStatus.textContent = 'データ抽出 & Notion保存完了！';
+                        showMessage('PDFからデータを抽出してNotionに保存しました！');
+                    }
                     fileStatus.className = 'file-status success';
 
-                    showMessage('PDFからデータを抽出してNotionに保存しました！');
-                    logDebug('データ抽出成功');
+                    logDebug('データ抽出成功' + (isReupload ? '（既存ページ更新）' : ''));
                     logDebug(`抽出されたパラメータ: ${JSON.stringify(result.data, null, 2)}`);
 
                 } else {

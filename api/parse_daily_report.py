@@ -55,6 +55,8 @@ class handler(BaseHTTPRequestHandler):
             content_length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(content_length)
 
+            existing_page_id = None
+
             if HAS_MULTIPART:
                 # python-multipart を使用（Python 3.13+）
                 environ = {
@@ -70,6 +72,10 @@ class handler(BaseHTTPRequestHandler):
 
                 file_item = files["file"]
                 pdf_bytes = file_item.raw
+
+                # 既存ページIDの取得（再アップロード時）
+                if "existing_page_id" in fields:
+                    existing_page_id = fields["existing_page_id"].value
 
             elif HAS_CGI:
                 # 古いcgiモジュールを使用（Python 3.12以前）
@@ -91,6 +97,10 @@ class handler(BaseHTTPRequestHandler):
 
                 pdf_bytes = file_item.file.read()
 
+                # 既存ページIDの取得（再アップロード時）
+                if "existing_page_id" in fs:
+                    existing_page_id = fs["existing_page_id"].value
+
             else:
                 self._send_json(500, {
                     "success": False,
@@ -104,13 +114,27 @@ class handler(BaseHTTPRequestHandler):
             # 2. 当日差額を計算
             today_difference = sum(patient.get("sagaku", 0) for patient in parsed_data["patients"])
 
-            # 3. Notion に保存（PDFバイト、集計データ、個別患者データ、当日差額を渡す）
-            notion_page_id = save_to_notion(
-                pdf_bytes,
-                parsed_data["summary"],
-                parsed_data["patients"],
-                today_difference
-            )
+            # 3. Notion に保存 or 既存ページを更新
+            updated_existing = False
+            if existing_page_id:
+                # 再アップロード: 既存ページを更新
+                print(f"[DEBUG] Re-upload detected. Updating existing page: {existing_page_id}")
+                notion_page_id = update_notion_page(
+                    existing_page_id,
+                    pdf_bytes,
+                    parsed_data["summary"],
+                    parsed_data["patients"],
+                    today_difference
+                )
+                updated_existing = True
+            else:
+                # 初回アップロード: 新規ページ作成
+                notion_page_id = save_to_notion(
+                    pdf_bytes,
+                    parsed_data["summary"],
+                    parsed_data["patients"],
+                    today_difference
+                )
 
             # 4. レスポンス（個別データと集計データの両方を返す）
             result = {
@@ -122,6 +146,7 @@ class handler(BaseHTTPRequestHandler):
                 },
                 "patients": parsed_data["patients"],
                 "notion_page_id": notion_page_id,
+                "updated_existing": updated_existing,
             }
             self._send_json(200, result)
 
@@ -375,71 +400,13 @@ def parse_patient_row(row):
 
 
 # ====================
-# Notion 保存
+# Notion ブロック生成
 # ====================
-def save_to_notion(pdf_bytes, summary, patients, today_difference):
-    """Notion に PDF、集計データ、個別患者データをすべて保存"""
-
-    try:
-        # 1. PDF アップロード
-        pdf_filename = f"日計表_{summary['date']}.pdf"
-        print(f"[DEBUG] Uploading PDF: {pdf_filename}")
-        file_upload_id = upload_file_to_notion(pdf_bytes, pdf_filename, "application/pdf")
-        print(f"[DEBUG] PDF uploaded successfully. File ID: {file_upload_id}")
-    except Exception as e:
-        print(f"[ERROR] PDF upload failed: {str(e)}")
-        raise Exception(f"PDF upload failed: {str(e)}")
-
-    # 2. ページ作成（データベースプロパティ）
-    try:
-        print(f"[DEBUG] Creating Notion page with database ID: {DATABASE_ID}")
-        print(f"[DEBUG] Page properties: タイトル={summary['date']} 日計表, 日付={summary['date']}")
-
-        page = notion.pages.create(
-            parent={"type": "data_source_id", "data_source_id": DATA_SOURCE_ID},
-            properties={
-                "タイトル": {"title": [{"text": {"content": f"{summary['date']} 日計表"}}]},
-                "日付": {"date": {"start": summary["date"]}},
-                "社保人数": {"number": summary["shaho_count"]},
-                "社保金額": {"number": summary["shaho_amount"]},
-                "国保人数": {"number": summary["kokuho_count"]},
-                "国保金額": {"number": summary["kokuho_amount"]},
-                "後期人数": {"number": summary["kouki_count"]},
-                "後期金額": {"number": summary["kouki_amount"]},
-                "自費人数": {"number": summary["jihi_count"]},
-                "自費金額": {"number": summary["jihi_amount"]},
-                "保険なし人数": {"number": summary["hoken_nashi_count"]},
-                "保険なし金額": {"number": summary["hoken_nashi_amount"]},
-                "合計人数": {"number": summary["total_count"]},
-                "合計金額": {"number": summary["total_amount"]},
-                "物販": {"number": summary["bushan_amount"]},
-                "介護": {"number": summary["kaigo_amount"]},
-                "前回差額": {"number": summary["zenkai_sagaku"]},
-                "当日差額": {"number": today_difference},
-                "PDF": {
-                    "files": [
-                        {
-                            "type": "file_upload",
-                            "file_upload": {"id": file_upload_id},
-                            "name": pdf_filename,
-                        }
-                    ]
-                },
-                "照合状態": {"select": {"name": "未照合"}},
-            },
-        )
-        page_id = page["id"]
-        print(f"[DEBUG] Notion page created successfully. Page ID: {page_id}")
-    except Exception as e:
-        print(f"[ERROR] Notion page creation failed: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        raise Exception(f"Notion page creation failed: {str(e)}")
-
-    # 3. ページ内にすべてのデータを保存
+def build_page_blocks(summary, patients, today_difference, file_upload_id):
+    """Notionページのコンテンツブロックを生成"""
     blocks = []
 
-    # 3-1. 集計データサマリー
+    # 集計データサマリー
     blocks.extend([
         {
             "object": "block",
@@ -542,7 +509,7 @@ def save_to_notion(pdf_bytes, summary, patients, today_difference):
         },
     ])
 
-    # 3-2. 個別患者データテーブル
+    # 個別患者データテーブル
     blocks.extend([
         {
             "object": "block",
@@ -558,7 +525,6 @@ def save_to_notion(pdf_bytes, summary, patients, today_difference):
     for i in range(0, len(patients), chunk_size):
         patient_chunk = patients[i:i+chunk_size]
 
-        # テーブルヘッダー
         table_children = [
             {
                 "type": "table_row",
@@ -576,7 +542,6 @@ def save_to_notion(pdf_bytes, summary, patients, today_difference):
             }
         ]
 
-        # データ行
         for patient in patient_chunk:
             table_children.append({
                 "type": "table_row",
@@ -603,7 +568,7 @@ def save_to_notion(pdf_bytes, summary, patients, today_difference):
             },
         })
 
-    # 3-3. 詳細データ（差額や物販などがある患者のみ）
+    # 詳細データ（差額や物販などがある患者のみ）
     patients_with_details = [
         p for p in patients
         if p.get("zenkai_sagaku", 0) != 0
@@ -699,7 +664,7 @@ def save_to_notion(pdf_bytes, summary, patients, today_difference):
                 },
             })
 
-    # 3-4. 元のPDF
+    # 元のPDF
     blocks.extend([
         {
             "object": "block",
@@ -719,7 +684,147 @@ def save_to_notion(pdf_bytes, summary, patients, today_difference):
         },
     ])
 
+    return blocks
+
+
+# ====================
+# Notion 保存
+# ====================
+def save_to_notion(pdf_bytes, summary, patients, today_difference):
+    """Notion に PDF、集計データ、個別患者データをすべて保存"""
+
+    try:
+        # 1. PDF アップロード
+        pdf_filename = f"日計表_{summary['date']}.pdf"
+        print(f"[DEBUG] Uploading PDF: {pdf_filename}")
+        file_upload_id = upload_file_to_notion(pdf_bytes, pdf_filename, "application/pdf")
+        print(f"[DEBUG] PDF uploaded successfully. File ID: {file_upload_id}")
+    except Exception as e:
+        print(f"[ERROR] PDF upload failed: {str(e)}")
+        raise Exception(f"PDF upload failed: {str(e)}")
+
+    # 2. ページ作成（データベースプロパティ）
+    try:
+        print(f"[DEBUG] Creating Notion page with database ID: {DATABASE_ID}")
+        print(f"[DEBUG] Page properties: タイトル={summary['date']} 日計表, 日付={summary['date']}")
+
+        page = notion.pages.create(
+            parent={"type": "data_source_id", "data_source_id": DATA_SOURCE_ID},
+            properties={
+                "タイトル": {"title": [{"text": {"content": f"{summary['date']} 日計表"}}]},
+                "日付": {"date": {"start": summary["date"]}},
+                "社保人数": {"number": summary["shaho_count"]},
+                "社保金額": {"number": summary["shaho_amount"]},
+                "国保人数": {"number": summary["kokuho_count"]},
+                "国保金額": {"number": summary["kokuho_amount"]},
+                "後期人数": {"number": summary["kouki_count"]},
+                "後期金額": {"number": summary["kouki_amount"]},
+                "自費人数": {"number": summary["jihi_count"]},
+                "自費金額": {"number": summary["jihi_amount"]},
+                "保険なし人数": {"number": summary["hoken_nashi_count"]},
+                "保険なし金額": {"number": summary["hoken_nashi_amount"]},
+                "合計人数": {"number": summary["total_count"]},
+                "合計金額": {"number": summary["total_amount"]},
+                "物販": {"number": summary["bushan_amount"]},
+                "介護": {"number": summary["kaigo_amount"]},
+                "前回差額": {"number": summary["zenkai_sagaku"]},
+                "当日差額": {"number": today_difference},
+                "PDF": {
+                    "files": [
+                        {
+                            "type": "file_upload",
+                            "file_upload": {"id": file_upload_id},
+                            "name": pdf_filename,
+                        }
+                    ]
+                },
+                "照合状態": {"select": {"name": "未照合"}},
+            },
+        )
+        page_id = page["id"]
+        print(f"[DEBUG] Notion page created successfully. Page ID: {page_id}")
+    except Exception as e:
+        print(f"[ERROR] Notion page creation failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise Exception(f"Notion page creation failed: {str(e)}")
+
+    # 3. ページ内にすべてのデータを保存
+    blocks = build_page_blocks(summary, patients, today_difference, file_upload_id)
+
     # すべてのブロックを追加
     notion.blocks.children.append(block_id=page_id, children=blocks)
 
     return page_id
+
+
+def update_notion_page(existing_page_id, pdf_bytes, summary, patients, today_difference):
+    """既存の Notion ページを最新のPDFデータで更新（再アップロード時）"""
+
+    try:
+        # 1. 新しいPDFをアップロード
+        pdf_filename = f"日計表_{summary['date']}.pdf"
+        print(f"[DEBUG] Re-upload: Uploading new PDF: {pdf_filename}")
+        file_upload_id = upload_file_to_notion(pdf_bytes, pdf_filename, "application/pdf")
+        print(f"[DEBUG] New PDF uploaded. File ID: {file_upload_id}")
+    except Exception as e:
+        print(f"[ERROR] PDF upload failed during re-upload: {str(e)}")
+        raise Exception(f"PDF upload failed: {str(e)}")
+
+    # 2. 既存ページのプロパティを更新
+    try:
+        print(f"[DEBUG] Updating page properties: {existing_page_id}")
+        notion.pages.update(
+            page_id=existing_page_id,
+            properties={
+                "タイトル": {"title": [{"text": {"content": f"{summary['date']} 日計表"}}]},
+                "日付": {"date": {"start": summary["date"]}},
+                "社保人数": {"number": summary["shaho_count"]},
+                "社保金額": {"number": summary["shaho_amount"]},
+                "国保人数": {"number": summary["kokuho_count"]},
+                "国保金額": {"number": summary["kokuho_amount"]},
+                "後期人数": {"number": summary["kouki_count"]},
+                "後期金額": {"number": summary["kouki_amount"]},
+                "自費人数": {"number": summary["jihi_count"]},
+                "自費金額": {"number": summary["jihi_amount"]},
+                "保険なし人数": {"number": summary["hoken_nashi_count"]},
+                "保険なし金額": {"number": summary["hoken_nashi_amount"]},
+                "合計人数": {"number": summary["total_count"]},
+                "合計金額": {"number": summary["total_amount"]},
+                "物販": {"number": summary["bushan_amount"]},
+                "介護": {"number": summary["kaigo_amount"]},
+                "前回差額": {"number": summary["zenkai_sagaku"]},
+                "当日差額": {"number": today_difference},
+                "PDF": {
+                    "files": [
+                        {
+                            "type": "file_upload",
+                            "file_upload": {"id": file_upload_id},
+                            "name": pdf_filename,
+                        }
+                    ]
+                },
+                "照合状態": {"select": {"name": "未照合"}},
+            },
+        )
+        print(f"[DEBUG] Page properties updated successfully")
+    except Exception as e:
+        print(f"[ERROR] Page property update failed: {str(e)}")
+        raise Exception(f"Page property update failed: {str(e)}")
+
+    # 3. 既存のブロックをすべて削除
+    try:
+        print(f"[DEBUG] Deleting existing blocks from page: {existing_page_id}")
+        existing_blocks = notion.blocks.children.list(block_id=existing_page_id)
+        for block in existing_blocks["results"]:
+            notion.blocks.delete(block_id=block["id"])
+        print(f"[DEBUG] Deleted {len(existing_blocks['results'])} blocks")
+    except Exception as e:
+        print(f"[WARNING] Failed to delete some blocks: {str(e)}")
+
+    # 4. 新しいブロックを追加（save_to_notionと同じ構造）
+    blocks = build_page_blocks(summary, patients, today_difference, file_upload_id)
+    notion.blocks.children.append(block_id=existing_page_id, children=blocks)
+    print(f"[DEBUG] New blocks added to existing page")
+
+    return existing_page_id
