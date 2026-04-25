@@ -1538,52 +1538,52 @@
             // 印刷用日付表示を更新
             updateDateDisplay();
 
-            // 印刷スタイルを一時的に適用（列幅を確保してoverflowを防ぐ）
+            // html2canvasはinputのvalue属性から描画するため、現在の.value値を属性に同期
+            const syncedInputs = [];
+            document.querySelectorAll('#verification-page input').forEach(i => {
+                if (i.type === 'date' || i.type === 'file') return;
+                syncedInputs.push({ el: i, prev: i.getAttribute('value') });
+                i.setAttribute('value', i.value);
+            });
+
+            // @media print の内容をフラットなスタイルとして適用し、html2canvasに印刷レイアウトを再現させる
             const printStyleSheet = document.createElement('style');
             printStyleSheet.id = 'temp-print-style';
-            printStyleSheet.textContent = `
-                th, td {
-                    padding: 5px 4px !important;
-                    font-size: 10px !important;
-                    line-height: 1.5 !important;
-                    word-wrap: break-word !important;
-                    overflow: visible !important;
-                    white-space: nowrap !important;
-                    border: 1px solid black !important;
-                    text-align: center !important;
-                    vertical-align: middle !important;
-                    font-family: 'MS Gothic', monospace !important;
-                    min-height: 24px !important;
+
+            let printCssText = '';
+            for (const sheet of document.styleSheets) {
+                let rules;
+                try { rules = sheet.cssRules; } catch (e) { continue; }
+                if (!rules) continue;
+                for (const rule of rules) {
+                    if (rule.type === CSSRule.MEDIA_RULE &&
+                        rule.conditionText && rule.conditionText.replace(/\s/g, '').includes('print')) {
+                        for (const inner of rule.cssRules) {
+                            if (inner.type === CSSRule.PAGE_RULE) continue;
+                            printCssText += inner.cssText + '\n';
+                        }
+                    }
+                }
+            }
+
+            // html2canvas用の追加調整（B5横の縦横比に近い固定幅、inputのベースラインずれ対策）
+            printCssText += `
+                #verification-page.print-container {
+                    width: 1000px !important;
+                    max-width: 1000px !important;
                     height: auto !important;
-                    box-sizing: border-box !important;
+                    min-height: 707px !important;
+                    margin: 0 !important;
                 }
-                .compact-table {
-                    font-size: 10px !important;
-                    width: 100% !important;
-                    table-layout: auto !important;
-                    border-collapse: collapse !important;
-                }
-                .col-subject { min-width: 80px !important; }
-                .col-dest { min-width: 100px !important; }
-                .col-note { min-width: 80px !important; }
-                .col-value { min-width: 80px !important; }
-                .difference-btn-single {
-                    width: 25px !important;
-                    height: 22px !important;
-                    padding: 3px !important;
-                    font-size: 12px !important;
-                    display: inline-block !important;
+                input {
+                    line-height: 1 !important;
+                    height: auto !important;
+                    padding: 1px 2px !important;
                     vertical-align: middle !important;
                 }
-                input.input-field {
-                    min-width: 50px !important;
-                    width: auto !important;
-                    font-size: 10px !important;
-                    line-height: 1.5 !important;
-                    padding: 2px 4px !important;
-                    vertical-align: middle !important;
-                }
+                td, th { overflow: visible !important; }
             `;
+            printStyleSheet.textContent = printCssText;
             document.head.appendChild(printStyleSheet);
 
             // レイアウトが安定するまで少し待機
@@ -1593,15 +1593,17 @@
                 // verification-pageをキャプチャ（デバッグ情報が非表示になっている）
                 const element = document.getElementById('verification-page');
 
-                // 高解像度・高品質でキャプチャ
+                // 高解像度・高品質でキャプチャ（windowWidthでviewport幅を固定）
                 const canvas = await html2canvas(element, {
-                    scale: 2,              // 解像度を2倍に（より鮮明）
+                    scale: 2,
                     useCORS: true,
                     logging: false,
                     backgroundColor: '#ffffff',
-                    windowHeight: element.scrollHeight,  // 全体の高さを確保
-                    height: element.scrollHeight,        // 要素全体をキャプチャ
-                    scrollY: -window.scrollY,            // スクロール位置を考慮
+                    width: 1000,
+                    height: element.scrollHeight,
+                    windowWidth: 1000,
+                    windowHeight: element.scrollHeight,
+                    scrollY: -window.scrollY,
                     scrollX: -window.scrollX
                 });
 
@@ -1612,7 +1614,17 @@
                 const imgData = canvas.toDataURL('image/jpeg', 0.95);
                 const pageWidth = pdf.internal.pageSize.getWidth();
                 const pageHeight = pdf.internal.pageSize.getHeight();
-                pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
+
+                // キャンバスのアスペクト比を保持して中央配置
+                let finalW = pageWidth;
+                let finalH = pageWidth * (canvas.height / canvas.width);
+                if (finalH > pageHeight) {
+                    finalH = pageHeight;
+                    finalW = pageHeight * (canvas.width / canvas.height);
+                }
+                const offsetX = (pageWidth - finalW) / 2;
+                const offsetY = (pageHeight - finalH) / 2;
+                pdf.addImage(imgData, 'JPEG', offsetX, offsetY, finalW, finalH);
 
                 const pdfBuffer = pdf.output('arraybuffer');
 
@@ -1625,6 +1637,12 @@
                 // 一時的なスタイルを削除
                 const tempStyle = document.getElementById('temp-print-style');
                 if (tempStyle) tempStyle.remove();
+
+                // input value属性を元に戻す
+                syncedInputs.forEach(({ el, prev }) => {
+                    if (prev === null) el.removeAttribute('value');
+                    else el.setAttribute('value', prev);
+                });
 
                 // no-print要素を再表示
                 noPrintElements.forEach(el => el.style.display = '');
