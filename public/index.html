@@ -1538,14 +1538,6 @@
             // 印刷用日付表示を更新
             updateDateDisplay();
 
-            // html2canvasはinputのvalue属性から描画するため、現在の.value値を属性に同期
-            const syncedInputs = [];
-            document.querySelectorAll('#verification-page input').forEach(i => {
-                if (i.type === 'date' || i.type === 'file') return;
-                syncedInputs.push({ el: i, prev: i.getAttribute('value') });
-                i.setAttribute('value', i.value);
-            });
-
             // @media print の内容をフラットなスタイルとして適用し、html2canvasに印刷レイアウトを再現させる
             const printStyleSheet = document.createElement('style');
             printStyleSheet.id = 'temp-print-style';
@@ -1566,7 +1558,7 @@
                 }
             }
 
-            // html2canvas用の追加調整（B5横の縦横比に近い固定幅、inputのベースラインずれ対策）
+            // html2canvas用の追加調整（B5横の縦横比に近い固定幅、セル内テキストの上下中央寄せ）
             printCssText += `
                 #verification-page.print-container {
                     width: 1000px !important;
@@ -1575,19 +1567,45 @@
                     min-height: 707px !important;
                     margin: 0 !important;
                 }
-                input {
-                    line-height: 1 !important;
-                    height: auto !important;
-                    padding: 1px 2px !important;
+                td, th {
                     vertical-align: middle !important;
+                    padding-top: 4px !important;
+                    padding-bottom: 4px !important;
+                    overflow: visible !important;
+                    line-height: 1.4 !important;
                 }
-                td, th { overflow: visible !important; }
+                .h2c-input-replacement {
+                    display: inline-block !important;
+                    box-sizing: border-box !important;
+                    line-height: 1.2 !important;
+                    vertical-align: middle !important;
+                    padding: 0 2px !important;
+                    border: none !important;
+                    background: transparent !important;
+                    color: black !important;
+                    font-family: 'MS Gothic', monospace !important;
+                    font-weight: bold !important;
+                }
             `;
             printStyleSheet.textContent = printCssText;
             document.head.appendChild(printStyleSheet);
 
             // レイアウトが安定するまで少し待機
             await new Promise(resolve => setTimeout(resolve, 300));
+
+            // html2canvasのinput描画はベースラインがずれて値が下端で切れることがあるため、
+            // 撮影中だけinputを同等のspanに差し替える
+            const replacedInputs = [];
+            document.querySelectorAll('#verification-page input').forEach(input => {
+                const t = (input.type || '').toLowerCase();
+                if (t === 'button' || t === 'submit' || t === 'date' || t === 'file' || t === 'checkbox' || t === 'radio') return;
+                const span = document.createElement('span');
+                span.className = (input.className ? input.className + ' ' : '') + 'h2c-input-replacement';
+                span.textContent = input.value;
+                input.parentNode.insertBefore(span, input);
+                input.style.display = 'none';
+                replacedInputs.push({ input, span });
+            });
 
             try {
                 // verification-pageをキャプチャ（デバッグ情報が非表示になっている）
@@ -1634,15 +1652,15 @@
 
                 return pdfBuffer;
             } finally {
+                // 差し替えたspanを除去し、inputを再表示
+                replacedInputs.forEach(({ input, span }) => {
+                    if (span && span.parentNode) span.parentNode.removeChild(span);
+                    input.style.display = '';
+                });
+
                 // 一時的なスタイルを削除
                 const tempStyle = document.getElementById('temp-print-style');
                 if (tempStyle) tempStyle.remove();
-
-                // input value属性を元に戻す
-                syncedInputs.forEach(({ el, prev }) => {
-                    if (prev === null) el.removeAttribute('value');
-                    else el.setAttribute('value', prev);
-                });
 
                 // no-print要素を再表示
                 noPrintElements.forEach(el => el.style.display = '');
