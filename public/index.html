@@ -125,10 +125,12 @@
             .col-item { width: 30% !important; }
             .col-count { width: 25% !important; }
             .col-amount { width: 45% !important; }
-            .col-subject { width: 20% !important; }
-            .col-dest { width: 25% !important; }
-            .col-note { width: 25% !important; }
-            .col-value { width: 30% !important; }
+            .col-subject { width: 17% !important; }
+            .col-dest { width: 17% !important; }
+            .col-note { width: 16% !important; }
+            .col-burden { width: 17% !important; }
+            .col-diff { width: 16% !important; }
+            .col-value { width: 17% !important; }
 
             .difference-controls {
                 display: none !important;
@@ -398,6 +400,10 @@
 
         .input-field-center {
             text-align: center;
+        }
+
+        .diff-na {
+            color: #999;
         }
 
         .overflow-hidden {
@@ -821,12 +827,14 @@
                 <table class="compact-table">
                     <thead>
                         <tr>
-                            <th colspan="4">窓口現金入金の記録</th>
+                            <th colspan="6">窓口現金入金の記録</th>
                         </tr>
                         <tr>
                             <th class="col-subject">科目</th>
                             <th class="col-dest">入金先</th>
                             <th class="col-note">摘要</th>
+                            <th class="col-burden">負担額</th>
+                            <th class="col-diff">当日差額</th>
                             <th class="col-value">入金額</th>
                         </tr>
                     </thead>
@@ -841,6 +849,8 @@
                                 <span class="print-sign" id="previousPrintSign">+</span>
                             </td>
                             <td><input type="number" class="input-field print-input-m" id="previousDifference" oninput="updateCalculations()"></td>
+                            <td class="diff-na">—</td>
+                            <td><span id="previousFinal">0</span></td>
                         </tr>
                         <tr>
                             <td>当日差額</td>
@@ -852,57 +862,77 @@
                                 <span class="print-sign" id="todayPrintSign">+</span>
                             </td>
                             <td><input type="number" class="input-field print-input-m" id="todayDifference" oninput="updateCalculations()"></td>
+                            <td class="diff-na">—</td>
+                            <td class="diff-na">—</td>
                         </tr>
                         <tr>
                             <td>社保</td>
                             <td>窓口収入合計</td>
                             <td><input type="number" class="input-field print-input-s" id="shahoCount" oninput="updateCalculations()">名</td>
                             <td><input type="number" class="input-field print-input-m" id="shahoIncome" oninput="updateCalculations()"></td>
+                            <td><input type="number" class="input-field print-input-m" id="shahoDiff" oninput="updateCalculations()"></td>
+                            <td><span id="shahoFinal">0</span></td>
                         </tr>
                         <tr>
                             <td>国保</td>
                             <td>窓口収入合計</td>
                             <td><input type="number" class="input-field print-input-s" id="kokuhoCount" oninput="updateCalculations()">名</td>
                             <td><input type="number" class="input-field print-input-m" id="kokuhoIncome" oninput="updateCalculations()"></td>
+                            <td><input type="number" class="input-field print-input-m" id="kokuhoDiff" oninput="updateCalculations()"></td>
+                            <td><span id="kokuhoFinal">0</span></td>
                         </tr>
                         <tr>
                             <td>後期高齢者</td>
                             <td>窓口収入合計</td>
                             <td><input type="number" class="input-field print-input-s" id="koukiCount" oninput="updateCalculations()">名</td>
                             <td><input type="number" class="input-field print-input-m" id="koukiIncome" oninput="updateCalculations()"></td>
+                            <td><input type="number" class="input-field print-input-m" id="koukiDiff" oninput="updateCalculations()"></td>
+                            <td><span id="koukiFinal">0</span></td>
                         </tr>
                         <tr>
                             <td>自費</td>
                             <td>窓口収入合計</td>
                             <td><input type="number" class="input-field print-input-s" id="jihiCount" oninput="updateCalculations()">名</td>
                             <td><input type="number" class="input-field print-input-m" id="jihiIncome" oninput="updateCalculations()"></td>
+                            <td><input type="number" class="input-field print-input-m" id="jihiDiff" oninput="updateCalculations()"></td>
+                            <td><span id="jihiFinal">0</span></td>
                         </tr>
                         <tr>
                             <td>保険なし</td>
                             <td>窓口収入合計</td>
                             <td><input type="number" class="input-field print-input-s" id="hokenNashiCount" oninput="updateCalculations()">名</td>
                             <td><input type="number" class="input-field print-input-m" id="hokenNashiIncome" oninput="updateCalculations()"></td>
+                            <td><input type="number" class="input-field print-input-m" id="hokenNashiDiff" oninput="updateCalculations()"></td>
+                            <td><span id="hokenNashiFinal">0</span></td>
                         </tr>
                         <tr>
                             <td>物販収入</td>
                             <td>窓口収入合計</td>
                             <td><input type="text" class="input-field input-field-center print-input-center" id="bushanNote"></td>
                             <td><input type="number" class="input-field print-input-m" id="bushanIncome" oninput="updateCalculations()"></td>
+                            <td><input type="number" class="input-field print-input-m" id="bushanDiff" oninput="updateCalculations()"></td>
+                            <td><span id="bushanFinal">0</span></td>
                         </tr>
                         <tr>
                             <td><input type="text" class="input-field input-field-center print-input-center" id="extraIncome1Subject"></td>
                             <td><input type="text" class="input-field input-field-center print-input-center" id="extraIncome1Destination"></td>
                             <td><input type="text" class="input-field input-field-center print-input-center" id="extraIncome1Note"></td>
                             <td><input type="number" class="input-field print-input-m" id="extraIncome1Amount" oninput="updateCalculations()"></td>
+                            <td><input type="number" class="input-field print-input-m" id="extraIncome1Diff" oninput="updateCalculations()"></td>
+                            <td><span id="extraIncome1Final">0</span></td>
                         </tr>
                         <tr>
                             <td><input type="text" class="input-field input-field-center print-input-center" id="extraIncome2Subject"></td>
                             <td><input type="text" class="input-field input-field-center print-input-center" id="extraIncome2Destination"></td>
                             <td><input type="text" class="input-field input-field-center print-input-center" id="extraIncome2Note"></td>
                             <td><input type="number" class="input-field print-input-m" id="extraIncome2Amount" oninput="updateCalculations()"></td>
+                            <td><input type="number" class="input-field print-input-m" id="extraIncome2Diff" oninput="updateCalculations()"></td>
+                            <td><span id="extraIncome2Final">0</span></td>
                         </tr>
                         <tr class="total-row">
                             <td colspan="3">合計</td>
+                            <td><span id="burdenTotal">0</span></td>
+                            <td><span id="diffTotal">0</span></td>
                             <td><span id="incomeTotal">0</span></td>
                         </tr>
                     </tbody>
@@ -1190,6 +1220,20 @@
                 logDebug(`後期高齢者金額: ${data.kouki_amount} → ${cleanNumericValue(data.kouki_amount)}`);
             }
 
+            // 保険種別ごとの当日差額（社保・国保・後期）
+            // 注：差額がプラス = 未収金 = 入金としてはマイナスなので符号を反転して表示
+            function setTypeDifference(id, label, value) {
+                if (value === undefined || value === null) return;
+                const numValue = parseFloat(value);
+                if (isNaN(numValue)) return;
+                const displayValue = numValue === 0 ? 0 : -numValue;
+                document.getElementById(id).value = displayValue;
+                logDebug(`${label}当日差額: ${value} → 符号反転 → ${displayValue}`);
+            }
+            setTypeDifference('shahoDiff', '社保', data.shaho_difference);
+            setTypeDifference('kokuhoDiff', '国保', data.kokuho_difference);
+            setTypeDifference('koukiDiff', '後期高齢者', data.kouki_difference);
+
             // 自費
             if (data.jihi_count) {
                 document.getElementById('jihiCount').value = cleanNumericValue(data.jihi_count);
@@ -1462,12 +1506,35 @@
             const todayDifferenceValue = parseInt(document.getElementById('todayDifference').value) || 0;
             const todayDifferenceAmount = todayDifferenceSign === '+' ? todayDifferenceValue : -todayDifferenceValue;
 
-            // 収入計算
-            const incomeItems = ['shahoIncome', 'kokuhoIncome', 'koukiIncome', 'jihiIncome', 'hokenNashiIncome', 'bushanIncome', 'extraIncome1Amount', 'extraIncome2Amount'];
-            let incomeTotal = previousDifferenceAmount + todayDifferenceAmount;
-            incomeItems.forEach(id => {
-                incomeTotal += parseInt(document.getElementById(id).value) || 0;
+            // 収入計算（行ごとに 入金額 = 負担額 + 当日差額 を算出）
+            const incomeRows = [
+                {burden: 'shahoIncome',        diff: 'shahoDiff',        final: 'shahoFinal'},
+                {burden: 'kokuhoIncome',       diff: 'kokuhoDiff',       final: 'kokuhoFinal'},
+                {burden: 'koukiIncome',        diff: 'koukiDiff',        final: 'koukiFinal'},
+                {burden: 'jihiIncome',         diff: 'jihiDiff',         final: 'jihiFinal'},
+                {burden: 'hokenNashiIncome',   diff: 'hokenNashiDiff',   final: 'hokenNashiFinal'},
+                {burden: 'bushanIncome',       diff: 'bushanDiff',       final: 'bushanFinal'},
+                {burden: 'extraIncome1Amount', diff: 'extraIncome1Diff', final: 'extraIncome1Final'},
+                {burden: 'extraIncome2Amount', diff: 'extraIncome2Diff', final: 'extraIncome2Final'}
+            ];
+
+            let burdenSubtotal = 0;
+            let diffSubtotal = 0;
+            incomeRows.forEach(row => {
+                const burden = parseInt(document.getElementById(row.burden).value) || 0;
+                const diff = parseInt(document.getElementById(row.diff).value) || 0;
+                document.getElementById(row.final).textContent = burden + diff;
+                burdenSubtotal += burden;
+                diffSubtotal += diff;
             });
+
+            // 前回差額（繰越）の入金額
+            document.getElementById('previousFinal').textContent = previousDifferenceAmount;
+
+            // 合計（入金額の総計は従来式を維持: 前回差額 + 当日差額(調整) + 各負担額）
+            const incomeTotal = previousDifferenceAmount + todayDifferenceAmount + burdenSubtotal;
+            document.getElementById('burdenTotal').textContent = burdenSubtotal;
+            document.getElementById('diffTotal').textContent = diffSubtotal;
             document.getElementById('incomeTotal').textContent = incomeTotal;
             document.getElementById('todayIncome').textContent = incomeTotal;
 
