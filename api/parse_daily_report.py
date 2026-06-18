@@ -111,8 +111,9 @@ class handler(BaseHTTPRequestHandler):
             # 1. PDF 解析
             parsed_data = parse_pdf(io.BytesIO(pdf_bytes))
 
-            # 2. 当日差額を計算
+            # 2. 当日差額を計算（全体 + 保険種別ごと）
             today_difference = sum(patient.get("sagaku", 0) for patient in parsed_data["patients"])
+            type_differences = calc_type_differences(parsed_data["patients"])
 
             # 3. Notion に保存 or 既存ページを更新
             updated_existing = False
@@ -143,6 +144,9 @@ class handler(BaseHTTPRequestHandler):
                     **parsed_data["summary"],
                     "previous_difference": parsed_data["summary"].get("zenkai_sagaku", 0),
                     "today_difference": today_difference,
+                    "shaho_difference": type_differences["shaho"],
+                    "kokuho_difference": type_differences["kokuho"],
+                    "kouki_difference": type_differences["kouki"],
                 },
                 "patients": parsed_data["patients"],
                 "notion_page_id": notion_page_id,
@@ -397,6 +401,32 @@ def parse_patient_row(row):
     except Exception as e:
         print(f"Warning: Failed to parse patient row: {e}")
         return None
+
+
+def classify_insurance_type(insurance_type):
+    """保険種別文字列から保険区分（社保/国保/後期）を判定
+
+    PDFの「保険種別」列は 社本/社家（社保）、国本/国家（国保）、後期（後期高齢者）
+    のような値を取る。
+    """
+    t = (insurance_type or "").strip()
+    if t.startswith("社"):
+        return "shaho"
+    if t.startswith("国"):
+        return "kokuho"
+    if t.startswith("後期"):
+        return "kouki"
+    return None
+
+
+def calc_type_differences(patients):
+    """保険区分ごとに当日差額（個別患者の差額の合計）を集計"""
+    differences = {"shaho": 0, "kokuho": 0, "kouki": 0}
+    for patient in patients:
+        key = classify_insurance_type(patient.get("insurance_type", ""))
+        if key:
+            differences[key] += patient.get("sagaku", 0)
+    return differences
 
 
 # ====================
