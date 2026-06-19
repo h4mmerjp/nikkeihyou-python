@@ -343,7 +343,7 @@
 
         .grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 40% 60%;
             gap: 0;
             min-height: 600px;
         }
@@ -358,7 +358,7 @@
         }
 
         .spacer {
-            height: 20px;
+            display: none;
         }
 
         table {
@@ -371,12 +371,13 @@
 
         th, td {
             border: 1px solid black;
-            padding: 4px;
+            padding: 3px 2px;
             text-align: center;
+            line-height: 1.2;
         }
 
         th {
-            background-color: #c0c0c0;
+            background-color: #d0d0d0;
             font-weight: bold;
         }
 
@@ -385,7 +386,7 @@
         }
 
         .total-row {
-            background-color: #e0e0e0;
+            background-color: #e8e8e8;
             font-weight: bold;
         }
 
@@ -394,8 +395,19 @@
             background: transparent;
             font-family: 'MS Gothic', monospace, sans-serif;
             font-size: 11px;
-            text-align: right;
+            text-align: center;
             width: 100%;
+        }
+
+        /* 印刷の見た目に合わせて数値入力のスピナー（上下矢印）を非表示 */
+        .input-field[type=number]::-webkit-outer-spin-button,
+        .input-field[type=number]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .input-field[type=number] {
+            -moz-appearance: textfield;
         }
 
         .input-field-center {
@@ -533,27 +545,28 @@
         }
 
         .difference-btn-single {
-            background-color: #e0e0e0;
-            border: 1px solid black;
-            padding: 2px 8px;
-            font-size: 12px;
+            background-color: transparent;
+            border: none;
+            padding: 0 4px;
+            font-size: 13px;
+            line-height: 1;
             cursor: pointer;
-            min-width: 30px;
             font-weight: bold;
+            color: black;
+            font-family: 'MS Gothic', monospace;
         }
 
+        /* 符号は印刷と同じプレーンな +/- 表記。色は画面での視認性のための補助のみ（印刷時は黒に上書き） */
         .difference-btn-single.positive {
-            background-color: #4CAF50;
-            color: white;
+            color: #2e7d32;
         }
 
         .difference-btn-single.negative {
-            background-color: #f44336;
-            color: white;
+            color: #c62828;
         }
 
         .difference-btn-single:hover {
-            opacity: 0.8;
+            text-decoration: underline;
         }
 
         .verify-section {
