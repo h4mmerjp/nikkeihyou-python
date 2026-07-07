@@ -13,6 +13,9 @@
                 margin: 0.3cm;
             }
             .no-print { display: none !important; }
+            /* 本体(app-container)以外のbody直下要素は印刷しない。
+               Vercelツールバー等の注入ウィジェットが印刷面や2ページ目に写り込むのを防ぐ */
+            body > *:not(.app-container) { display: none !important; }
             .print-block { display: block !important; }
             body {
                 margin: 0 !important;
