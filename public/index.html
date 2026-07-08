@@ -13,6 +13,9 @@
                 margin: 0.3cm;
             }
             .no-print { display: none !important; }
+            /* 本体(app-container)以外のbody直下要素は印刷しない。
+               Vercelツールバー等の注入ウィジェットが印刷面や2ページ目に写り込むのを防ぐ */
+            body > *:not(.app-container) { display: none !important; }
             .print-block { display: block !important; }
             body {
                 margin: 0 !important;
@@ -56,7 +59,7 @@
                 margin-bottom: 8px !important;
             }
             th, td {
-                padding: 3px 2px !important;
+                padding: 2px 2px !important;
                 font-size: 11px !important;
                 line-height: 1.2 !important;
                 word-wrap: break-word !important;
@@ -71,7 +74,8 @@
                 gap: 8px !important;
                 width: 100% !important;
                 height: auto !important;
-                flex: 1 !important;
+                min-height: 0 !important;
+                flex: 0 0 auto !important;
             }
             .print-header {
                 font-size: 14px !important;
@@ -1646,6 +1650,11 @@
                     height: auto !important;
                     min-height: 0 !important;
                     margin: 0 !important;
+                }
+                /* キャプチャ(Notion保存)は従来の縦フィルを維持。実際の印刷(@media print)側のみ
+                   grid の min-height を 0 にして1ページに収める */
+                .grid {
+                    min-height: 600px !important;
                 }
                 td, th {
                     vertical-align: middle !important;
