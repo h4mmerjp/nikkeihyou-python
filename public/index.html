@@ -45,8 +45,8 @@
                 font-size: 12px !important;
                 border: 2px solid black !important;
                 box-sizing: border-box !important;
-                overflow: hidden !important;
-                height: 100vh !important;
+                overflow: visible !important;
+                height: auto !important;
                 display: flex !important;
                 flex-direction: column !important;
             }
@@ -59,9 +59,9 @@
                 margin-bottom: 8px !important;
             }
             th, td {
-                padding: 2px 2px !important;
+                padding: 2px 3px !important;
                 font-size: 11px !important;
-                line-height: 1.2 !important;
+                line-height: 1.15 !important;
                 word-wrap: break-word !important;
                 overflow: hidden !important;
                 border: 1px solid black !important;
@@ -1636,6 +1636,9 @@
                         rule.conditionText && rule.conditionText.replace(/\s/g, '').includes('print')) {
                         for (const inner of rule.cssRules) {
                             if (inner.type === CSSRule.PAGE_RULE) continue;
+                            // body直下要素を隠すルールは実印刷専用。html2canvasのクローンに
+                            // 適用すると描画対象ごと消えて真っ白になるためキャプチャからは除外
+                            if (inner.selectorText && inner.selectorText.includes(':not(.app-container)')) continue;
                             printCssText += inner.cssText + '\n';
                         }
                     }
