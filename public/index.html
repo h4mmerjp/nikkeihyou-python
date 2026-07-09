@@ -1235,10 +1235,14 @@
             setTypeDifference('kokuhoDiff', '国保', data.kokuho_difference);
             setTypeDifference('koukiDiff', '後期高齢者', data.kouki_difference);
 
-            // 保険（社保・国保・後期）の合計点数
-            if (data.insurance_points !== undefined && data.insurance_points !== null) {
-                document.getElementById('pointsTotal').textContent = cleanNumericValue(data.insurance_points) || 0;
-                logDebug(`保険合計点数: ${data.insurance_points}`);
+            // 合計人数・合計点数（PDFの患者明細「合計」行の値を使用）
+            if (data.total_count !== undefined && data.total_count !== null) {
+                document.getElementById('peopleTotal').textContent = cleanNumericValue(data.total_count) || 0;
+                logDebug(`合計人数: ${data.total_count}`);
+            }
+            if (data.total_points !== undefined && data.total_points !== null) {
+                document.getElementById('pointsTotal').textContent = cleanNumericValue(data.total_points) || 0;
+                logDebug(`合計点数: ${data.total_points}`);
             }
 
             // 自費
@@ -1528,14 +1532,6 @@
                 burdenSubtotal += burden;
                 diffSubtotal += diff;
             });
-
-            // 合計人数（各科目の人数の合計）
-            const countIds = ['shahoCount', 'kokuhoCount', 'koukiCount', 'jihiCount', 'hokenNashiCount'];
-            let peopleTotal = 0;
-            countIds.forEach(id => {
-                peopleTotal += parseInt(document.getElementById(id).value) || 0;
-            });
-            document.getElementById('peopleTotal').textContent = peopleTotal;
 
             // 前回差額（繰越）の入金額
             document.getElementById('previousFinal').textContent = previousDifferenceAmount;
@@ -1857,7 +1853,8 @@
                 }
             });
 
-            // 保険合計点数（入力欄ではないspan）もリセット
+            // 合計人数・合計点数（入力欄ではないspan）もリセット
+            document.getElementById('peopleTotal').textContent = '0';
             document.getElementById('pointsTotal').textContent = '0';
 
             // PDFファイル選択もクリア

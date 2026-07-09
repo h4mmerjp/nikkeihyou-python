@@ -114,7 +114,6 @@ class handler(BaseHTTPRequestHandler):
             # 2. 当日差額を計算（全体 + 保険種別ごと）
             today_difference = sum(patient.get("sagaku", 0) for patient in parsed_data["patients"])
             type_differences = calc_type_differences(parsed_data["patients"])
-            insurance_points = calc_insurance_points(parsed_data["patients"])
 
             # 3. Notion に保存 or 既存ページを更新
             updated_existing = False
@@ -148,7 +147,6 @@ class handler(BaseHTTPRequestHandler):
                     "shaho_difference": type_differences["shaho"],
                     "kokuho_difference": type_differences["kokuho"],
                     "kouki_difference": type_differences["kouki"],
-                    "insurance_points": insurance_points,
                 },
                 "patients": parsed_data["patients"],
                 "notion_page_id": notion_page_id,
@@ -240,6 +238,7 @@ def parse_pdf(pdf_file):
             "hoken_nashi_count": 0,
             "hoken_nashi_amount": 0,
             "total_count": 0,
+            "total_points": 0,
             "total_amount": 0,
             "bushan_amount": 0,
             "kaigo_amount": 0,
@@ -259,11 +258,12 @@ def parse_pdf(pdf_file):
                 summary[f"{key}_count"] = int(last_match[0])
                 summary[f"{key}_amount"] = int(last_match[1].replace(",", ""))
 
-        # 合計
-        total_m = re.search(r"合計\s+(\d+)\s+[\d,]+\s+([\d,]+)", all_text)
+        # 合計（人数 / 点数 / 負担額）— 患者明細の合計行
+        total_m = re.search(r"合計\s+(\d+)\s+([\d,]+)\s+([\d,]+)", all_text)
         if total_m:
             summary["total_count"] = int(total_m.group(1))
-            summary["total_amount"] = int(total_m.group(2).replace(",", ""))
+            summary["total_points"] = int(total_m.group(2).replace(",", ""))
+            summary["total_amount"] = int(total_m.group(3).replace(",", ""))
 
         # 自費・前回差額（全体合計行から位置ベースで抽出）
         goukei_full_m = re.search(
@@ -429,15 +429,6 @@ def calc_type_differences(patients):
         if key:
             differences[key] += patient.get("sagaku", 0)
     return differences
-
-
-def calc_insurance_points(patients):
-    """保険（社保/国保/後期）の患者の点数合計を集計"""
-    total = 0
-    for patient in patients:
-        if classify_insurance_type(patient.get("insurance_type", "")):
-            total += patient.get("points", 0)
-    return total
 
 
 # ====================
