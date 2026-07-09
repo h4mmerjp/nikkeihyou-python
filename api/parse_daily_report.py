@@ -114,6 +114,7 @@ class handler(BaseHTTPRequestHandler):
             # 2. 当日差額を計算（全体 + 保険種別ごと）
             today_difference = sum(patient.get("sagaku", 0) for patient in parsed_data["patients"])
             type_differences = calc_type_differences(parsed_data["patients"])
+            insurance_points = calc_insurance_points(parsed_data["patients"])
 
             # 3. Notion に保存 or 既存ページを更新
             updated_existing = False
@@ -147,6 +148,7 @@ class handler(BaseHTTPRequestHandler):
                     "shaho_difference": type_differences["shaho"],
                     "kokuho_difference": type_differences["kokuho"],
                     "kouki_difference": type_differences["kouki"],
+                    "insurance_points": insurance_points,
                 },
                 "patients": parsed_data["patients"],
                 "notion_page_id": notion_page_id,
@@ -427,6 +429,15 @@ def calc_type_differences(patients):
         if key:
             differences[key] += patient.get("sagaku", 0)
     return differences
+
+
+def calc_insurance_points(patients):
+    """保険（社保/国保/後期）の患者の点数合計を集計"""
+    total = 0
+    for patient in patients:
+        if classify_insurance_type(patient.get("insurance_type", "")):
+            total += patient.get("points", 0)
+    return total
 
 
 # ====================

@@ -129,6 +129,9 @@
             .col-item { width: 30% !important; }
             .col-count { width: 25% !important; }
             .col-amount { width: 45% !important; }
+            .col-kind { width: 22% !important; }
+            .col-mai { width: 18% !important; }
+            .col-amt { width: 24% !important; }
             .col-subject { width: 17% !important; }
             .col-dest { width: 17% !important; }
             .col-note { width: 16% !important; }
@@ -720,122 +723,102 @@
             <div class="left-section">
                 <div class="spacer"></div>
 
-                <!-- ストック -->
+                <!-- 本日の残高金種（ストック含む） -->
                 <table class="compact-table">
                     <thead>
                         <tr>
-                            <th colspan="3">ストック</th>
+                            <th colspan="5">本日の残高金種</th>
+                        </tr>
+                        <tr>
+                            <th class="col-kind">金種</th>
+                            <th class="col-mai">残高</th>
+                            <th class="col-mai">ストック</th>
+                            <th class="col-mai">合計</th>
+                            <th class="col-amt">金額</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr class="data-row">
-                            <td class="col-item">5百円</td>
-                            <td class="col-count"><input type="number" class="input-field print-input-s" id="stock500" oninput="updateCalculations()">枚</td>
-                            <td class="col-amount"><span id="stock500Total">0</span></td>
+                            <td class="col-kind">1万円</td>
+                            <td class="col-mai"><input type="number" class="input-field print-input-s" id="bill10000" oninput="updateCalculations()">枚</td>
+                            <td class="col-mai"></td>
+                            <td class="col-mai"><span id="bill10000Count">0</span>枚</td>
+                            <td class="col-amt"><span id="bill10000Total">0</span></td>
                         </tr>
                         <tr class="data-row">
-                            <td class="col-item">100円</td>
-                            <td class="col-count"><input type="number" class="input-field print-input-s" id="stock100" oninput="updateCalculations()">枚</td>
-                            <td class="col-amount"><span id="stock100Total">0</span></td>
+                            <td class="col-kind">5千円</td>
+                            <td class="col-mai"><input type="number" class="input-field print-input-s" id="bill5000" oninput="updateCalculations()">枚</td>
+                            <td class="col-mai"></td>
+                            <td class="col-mai"><span id="bill5000Count">0</span>枚</td>
+                            <td class="col-amt"><span id="bill5000Total">0</span></td>
                         </tr>
                         <tr class="data-row">
-                            <td class="col-item">50円</td>
-                            <td class="col-count"><input type="number" class="input-field print-input-s" id="stock50" oninput="updateCalculations()">枚</td>
-                            <td class="col-amount"><span id="stock50Total">0</span></td>
+                            <td class="col-kind">2千円</td>
+                            <td class="col-mai"><input type="number" class="input-field print-input-s" id="bill2000" oninput="updateCalculations()">枚</td>
+                            <td class="col-mai"></td>
+                            <td class="col-mai"><span id="bill2000Count">0</span>枚</td>
+                            <td class="col-amt"><span id="bill2000Total">0</span></td>
                         </tr>
                         <tr class="data-row">
-                            <td class="col-item">10円</td>
-                            <td class="col-count"><input type="number" class="input-field print-input-s" id="stock10" oninput="updateCalculations()">枚</td>
-                            <td class="col-amount"><span id="stock10Total">0</span></td>
+                            <td class="col-kind">千円</td>
+                            <td class="col-mai"><input type="number" class="input-field print-input-s" id="bill1000" oninput="updateCalculations()">枚</td>
+                            <td class="col-mai"></td>
+                            <td class="col-mai"><span id="bill1000Count">0</span>枚</td>
+                            <td class="col-amt"><span id="bill1000Total">0</span></td>
                         </tr>
                         <tr class="data-row">
-                            <td class="col-item">5円</td>
-                            <td class="col-count"><input type="number" class="input-field print-input-s" id="stock5" oninput="updateCalculations()">枚</td>
-                            <td class="col-amount"><span id="stock5Total">0</span></td>
+                            <td class="col-kind">5百円</td>
+                            <td class="col-mai"><input type="number" class="input-field print-input-s" id="coin500" oninput="updateCalculations()">枚</td>
+                            <td class="col-mai"><input type="number" class="input-field print-input-s" id="stock500" oninput="updateCalculations()">枚</td>
+                            <td class="col-mai"><span id="coin500Count">0</span>枚</td>
+                            <td class="col-amt"><span id="coin500Total">0</span></td>
                         </tr>
                         <tr class="data-row">
-                            <td class="col-item">1円</td>
-                            <td class="col-count"><input type="number" class="input-field print-input-s" id="stock1" oninput="updateCalculations()">枚</td>
-                            <td class="col-amount"><span id="stock1Total">0</span></td>
+                            <td class="col-kind">100円</td>
+                            <td class="col-mai"><input type="number" class="input-field print-input-s" id="coin100" oninput="updateCalculations()">枚</td>
+                            <td class="col-mai"><input type="number" class="input-field print-input-s" id="stock100" oninput="updateCalculations()">枚</td>
+                            <td class="col-mai"><span id="coin100Count">0</span>枚</td>
+                            <td class="col-amt"><span id="coin100Total">0</span></td>
+                        </tr>
+                        <tr class="data-row">
+                            <td class="col-kind">50円</td>
+                            <td class="col-mai"><input type="number" class="input-field print-input-s" id="coin50" oninput="updateCalculations()">枚</td>
+                            <td class="col-mai"><input type="number" class="input-field print-input-s" id="stock50" oninput="updateCalculations()">枚</td>
+                            <td class="col-mai"><span id="coin50Count">0</span>枚</td>
+                            <td class="col-amt"><span id="coin50Total">0</span></td>
+                        </tr>
+                        <tr class="data-row">
+                            <td class="col-kind">10円</td>
+                            <td class="col-mai"><input type="number" class="input-field print-input-s" id="coin10" oninput="updateCalculations()">枚</td>
+                            <td class="col-mai"><input type="number" class="input-field print-input-s" id="stock10" oninput="updateCalculations()">枚</td>
+                            <td class="col-mai"><span id="coin10Count">0</span>枚</td>
+                            <td class="col-amt"><span id="coin10Total">0</span></td>
+                        </tr>
+                        <tr class="data-row">
+                            <td class="col-kind">5円</td>
+                            <td class="col-mai"><input type="number" class="input-field print-input-s" id="coin5" oninput="updateCalculations()">枚</td>
+                            <td class="col-mai"><input type="number" class="input-field print-input-s" id="stock5" oninput="updateCalculations()">枚</td>
+                            <td class="col-mai"><span id="coin5Count">0</span>枚</td>
+                            <td class="col-amt"><span id="coin5Total">0</span></td>
+                        </tr>
+                        <tr class="data-row">
+                            <td class="col-kind">1円</td>
+                            <td class="col-mai"><input type="number" class="input-field print-input-s" id="coin1" oninput="updateCalculations()">枚</td>
+                            <td class="col-mai"><input type="number" class="input-field print-input-s" id="stock1" oninput="updateCalculations()">枚</td>
+                            <td class="col-mai"><span id="coin1Count">0</span>枚</td>
+                            <td class="col-amt"><span id="coin1Total">0</span></td>
                         </tr>
                         <tr class="total-row">
-                            <td class="col-item">ストック合計</td>
-                            <td class="col-count"></td>
-                            <td class="col-amount"><span id="stockGrandTotal">0</span></td>
+                            <td class="col-kind">合計</td>
+                            <td class="col-mai"><span id="residualCountTotal">0</span>枚</td>
+                            <td class="col-mai"><span id="stockCountTotal">0</span>枚</td>
+                            <td class="col-mai"><span id="combinedCountTotal">0</span>枚</td>
+                            <td class="col-amt"><span id="totalBalance">0</span></td>
                         </tr>
                     </tbody>
                 </table>
-
-                <!-- 本日の残高金種 -->
-                <table class="compact-table">
-                    <thead>
-                        <tr>
-                            <th colspan="3">本日の残高金種</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr class="data-row">
-                            <td class="col-item">1万円</td>
-                            <td class="col-count"><input type="number" class="input-field print-input-s" id="bill10000" oninput="updateCalculations()">枚</td>
-                            <td class="col-amount"><span id="bill10000Total">0</span></td>
-                        </tr>
-                        <tr class="data-row">
-                            <td class="col-item">5千円</td>
-                            <td class="col-count"><input type="number" class="input-field print-input-s" id="bill5000" oninput="updateCalculations()">枚</td>
-                            <td class="col-amount"><span id="bill5000Total">0</span></td>
-                        </tr>
-                        <tr class="data-row">
-                            <td class="col-item">2千円</td>
-                            <td class="col-count"><input type="number" class="input-field print-input-s" id="bill2000" oninput="updateCalculations()">枚</td>
-                            <td class="col-amount"><span id="bill2000Total">0</span></td>
-                        </tr>
-                        <tr class="data-row">
-                            <td class="col-item">千円</td>
-                            <td class="col-count"><input type="number" class="input-field print-input-s" id="bill1000" oninput="updateCalculations()">枚</td>
-                            <td class="col-amount"><span id="bill1000Total">0</span></td>
-                        </tr>
-                        <tr class="data-row">
-                            <td class="col-item">5百円</td>
-                            <td class="col-count"><input type="number" class="input-field print-input-s" id="coin500" oninput="updateCalculations()">枚</td>
-                            <td class="col-amount"><span id="coin500Total">0</span></td>
-                        </tr>
-                        <tr class="data-row">
-                            <td class="col-item">100円</td>
-                            <td class="col-count"><input type="number" class="input-field print-input-s" id="coin100" oninput="updateCalculations()">枚</td>
-                            <td class="col-amount"><span id="coin100Total">0</span></td>
-                        </tr>
-                        <tr class="data-row">
-                            <td class="col-item">50円</td>
-                            <td class="col-count"><input type="number" class="input-field print-input-s" id="coin50" oninput="updateCalculations()">枚</td>
-                            <td class="col-amount"><span id="coin50Total">0</span></td>
-                        </tr>
-                        <tr class="data-row">
-                            <td class="col-item">10円</td>
-                            <td class="col-count"><input type="number" class="input-field print-input-s" id="coin10" oninput="updateCalculations()">枚</td>
-                            <td class="col-amount"><span id="coin10Total">0</span></td>
-                        </tr>
-                        <tr class="data-row">
-                            <td class="col-item">5円</td>
-                            <td class="col-count"><input type="number" class="input-field print-input-s" id="coin5" oninput="updateCalculations()">枚</td>
-                            <td class="col-amount"><span id="coin5Total">0</span></td>
-                        </tr>
-                        <tr class="data-row">
-                            <td class="col-item">1円</td>
-                            <td class="col-count"><input type="number" class="input-field print-input-s" id="coin1" oninput="updateCalculations()">枚</td>
-                            <td class="col-amount"><span id="coin1Total">0</span></td>
-                        </tr>
-                        <tr class="total-row">
-                            <td class="col-item">金種合計</td>
-                            <td class="col-count"></td>
-                            <td class="col-amount"><span id="currencyTotal">0</span></td>
-                        </tr>
-                        <tr class="total-row">
-                            <td class="col-item">総残高</td>
-                            <td class="col-count"></td>
-                            <td class="col-amount"><span id="totalBalance">0</span></td>
-                        </tr>
-                    </tbody>
-                </table>
+                <span id="stockGrandTotal" style="display:none;">0</span>
+                <span id="currencyTotal" style="display:none;">0</span>
             </div>
 
             <!-- 右側：窓口現金入出金 -->
@@ -947,7 +930,8 @@
                             <td><span id="extraIncome2Final">0</span></td>
                         </tr>
                         <tr class="total-row">
-                            <td colspan="3">合計</td>
+                            <td>合計</td>
+                            <td colspan="2"><span id="peopleTotal">0</span>名　<span id="pointsTotal">0</span>点</td>
                             <td><span id="burdenTotal">0</span></td>
                             <td><span id="diffTotal">0</span></td>
                             <td><span id="incomeTotal">0</span></td>
@@ -1251,6 +1235,12 @@
             setTypeDifference('kokuhoDiff', '国保', data.kokuho_difference);
             setTypeDifference('koukiDiff', '後期高齢者', data.kouki_difference);
 
+            // 保険（社保・国保・後期）の合計点数
+            if (data.insurance_points !== undefined && data.insurance_points !== null) {
+                document.getElementById('pointsTotal').textContent = cleanNumericValue(data.insurance_points) || 0;
+                logDebug(`保険合計点数: ${data.insurance_points}`);
+            }
+
             // 自費
             if (data.jihi_count) {
                 document.getElementById('jihiCount').value = cleanNumericValue(data.jihi_count);
@@ -1469,52 +1459,46 @@
 
         // 計算更新
         function updateCalculations() {
-            // ストック計算
-            const stockItems = [
-                {id: 'stock500', value: 500},
-                {id: 'stock100', value: 100},
-                {id: 'stock50', value: 50},
-                {id: 'stock10', value: 10},
-                {id: 'stock5', value: 5},
-                {id: 'stock1', value: 1}
+            // 金種計算（金種ごとに 残高＋ストック の合計枚数・金額を算出）
+            const denominations = [
+                {value: 10000, residual: 'bill10000', stock: null},
+                {value: 5000,  residual: 'bill5000',  stock: null},
+                {value: 2000,  residual: 'bill2000',  stock: null},
+                {value: 1000,  residual: 'bill1000',  stock: null},
+                {value: 500,   residual: 'coin500',   stock: 'stock500'},
+                {value: 100,   residual: 'coin100',   stock: 'stock100'},
+                {value: 50,    residual: 'coin50',    stock: 'stock50'},
+                {value: 10,    residual: 'coin10',    stock: 'stock10'},
+                {value: 5,     residual: 'coin5',     stock: 'stock5'},
+                {value: 1,     residual: 'coin1',     stock: 'stock1'}
             ];
 
-            let stockTotal = 0;
-            stockItems.forEach(item => {
-                const count = parseInt(document.getElementById(item.id).value) || 0;
-                const total = count * item.value;
-                document.getElementById(item.id + 'Total').textContent = total;
-                stockTotal += total;
+            let residualAmount = 0;
+            let stockAmount = 0;
+            let residualCountTotal = 0;
+            let stockCountTotal = 0;
+            let combinedCountTotal = 0;
+            denominations.forEach(d => {
+                const residualCount = parseInt(document.getElementById(d.residual).value) || 0;
+                const stockCount = d.stock ? (parseInt(document.getElementById(d.stock).value) || 0) : 0;
+                const combined = residualCount + stockCount;
+                document.getElementById(d.residual + 'Count').textContent = combined;
+                document.getElementById(d.residual + 'Total').textContent = combined * d.value;
+                residualAmount += residualCount * d.value;
+                stockAmount += stockCount * d.value;
+                residualCountTotal += residualCount;
+                stockCountTotal += stockCount;
+                combinedCountTotal += combined;
             });
 
-            document.getElementById('stockGrandTotal').textContent = stockTotal;
-
-            // 金種計算
-            const currencyItems = [
-                {id: 'bill10000', value: 10000},
-                {id: 'bill5000', value: 5000},
-                {id: 'bill2000', value: 2000},
-                {id: 'bill1000', value: 1000},
-                {id: 'coin500', value: 500},
-                {id: 'coin100', value: 100},
-                {id: 'coin50', value: 50},
-                {id: 'coin10', value: 10},
-                {id: 'coin5', value: 5},
-                {id: 'coin1', value: 1}
-            ];
-
-            let currencyTotal = 0;
-            currencyItems.forEach(item => {
-                const count = parseInt(document.getElementById(item.id).value) || 0;
-                const total = count * item.value;
-                document.getElementById(item.id + 'Total').textContent = total;
-                currencyTotal += total;
-            });
-
-            document.getElementById('currencyTotal').textContent = currencyTotal;
-
-            const totalBalance = stockTotal + currencyTotal;
+            const totalBalance = residualAmount + stockAmount;
+            document.getElementById('residualCountTotal').textContent = residualCountTotal;
+            document.getElementById('stockCountTotal').textContent = stockCountTotal;
+            document.getElementById('combinedCountTotal').textContent = combinedCountTotal;
             document.getElementById('totalBalance').textContent = totalBalance;
+            // exportData互換用（画面には非表示）
+            document.getElementById('stockGrandTotal').textContent = stockAmount;
+            document.getElementById('currencyTotal').textContent = residualAmount;
 
             // 前回差額と当日差額の処理
             const previousDifferenceValue = parseInt(document.getElementById('previousDifference').value) || 0;
@@ -1544,6 +1528,14 @@
                 burdenSubtotal += burden;
                 diffSubtotal += diff;
             });
+
+            // 合計人数（各科目の人数の合計）
+            const countIds = ['shahoCount', 'kokuhoCount', 'koukiCount', 'jihiCount', 'hokenNashiCount'];
+            let peopleTotal = 0;
+            countIds.forEach(id => {
+                peopleTotal += parseInt(document.getElementById(id).value) || 0;
+            });
+            document.getElementById('peopleTotal').textContent = peopleTotal;
 
             // 前回差額（繰越）の入金額
             document.getElementById('previousFinal').textContent = previousDifferenceAmount;
@@ -1864,6 +1856,9 @@
                     input.value = '';
                 }
             });
+
+            // 保険合計点数（入力欄ではないspan）もリセット
+            document.getElementById('pointsTotal').textContent = '0';
 
             // PDFファイル選択もクリア
             document.getElementById('pdfFile').value = '';
