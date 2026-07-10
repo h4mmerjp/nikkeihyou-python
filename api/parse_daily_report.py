@@ -238,6 +238,7 @@ def parse_pdf(pdf_file):
             "hoken_nashi_count": 0,
             "hoken_nashi_amount": 0,
             "total_count": 0,
+            "total_points": 0,
             "total_amount": 0,
             "bushan_amount": 0,
             "kaigo_amount": 0,
@@ -257,11 +258,12 @@ def parse_pdf(pdf_file):
                 summary[f"{key}_count"] = int(last_match[0])
                 summary[f"{key}_amount"] = int(last_match[1].replace(",", ""))
 
-        # 合計
-        total_m = re.search(r"合計\s+(\d+)\s+[\d,]+\s+([\d,]+)", all_text)
+        # 合計（人数 / 点数 / 負担額）— 患者明細の合計行
+        total_m = re.search(r"合計\s+(\d+)\s+([\d,]+)\s+([\d,]+)", all_text)
         if total_m:
             summary["total_count"] = int(total_m.group(1))
-            summary["total_amount"] = int(total_m.group(2).replace(",", ""))
+            summary["total_points"] = int(total_m.group(2).replace(",", ""))
+            summary["total_amount"] = int(total_m.group(3).replace(",", ""))
 
         # 自費・前回差額（全体合計行から位置ベースで抽出）
         goukei_full_m = re.search(
