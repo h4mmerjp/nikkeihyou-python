@@ -1182,9 +1182,35 @@
             }
         }
 
+        // PDF読み込み前のクリア（金種表・出金表はユーザー入力なので保持）
+        function clearFieldsBeforePdfLoad() {
+            const keepPattern = /^(bill|coin|stock|expense)/;
+            const inputs = document.querySelectorAll('input[type="number"], input[type="text"]');
+            inputs.forEach(input => {
+                if (input.id !== 'reportDate' && !keepPattern.test(input.id)) {
+                    input.value = '';
+                }
+            });
+
+            document.getElementById('peopleTotal').textContent = '0';
+            document.getElementById('pointsTotal').textContent = '0';
+
+            previousDifferenceSign = '+';
+            todayDifferenceSign = '+';
+            ['previousSignBtn', 'todaySignBtn'].forEach(id => {
+                const btn = document.getElementById(id);
+                btn.textContent = '+';
+                btn.classList.remove('positive', 'negative');
+                btn.classList.add('positive');
+            });
+
+            logDebug('PDF読み込み前に項目をクリア（金種表・出金表は保持）');
+        }
+
         // 抽出されたデータをフォームに入力
         function populateFormWithExtractedData(data) {
             logDebug('フォームへのデータ入力開始');
+            clearFieldsBeforePdfLoad();
 
             function cleanNumericValue(value) {
                 if (!value) return '';
