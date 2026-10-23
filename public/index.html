@@ -1144,6 +1144,7 @@
                     populateFormWithExtractedData(result.data);
                     window.notionPageId = result.notion_page_id;
                     window.notionAutoSent = false;
+                    updateCalculations();
 
                     // 判定結果をリセット
                     const balanceCheck = document.getElementById('balanceCheck');
@@ -1386,6 +1387,8 @@
                 logDebug(`日付: ${data.date}`);
             }
 
+            fillPreviousBalanceFromHistory(document.getElementById('reportDate').value);
+
             updatePrintSigns();
             updateCalculations();
             logDebug('フォームへのデータ入力完了');
@@ -1583,6 +1586,48 @@
             const finalBalance = previousBalance + incomeTotal - expenseTotal;
             document.getElementById('finalBalance').textContent = finalBalance;
 
+            // PDF読み込み済みの日だけ残高を保存（全クリア後の0で上書きしない）
+            if (window.notionPageId) {
+                saveDailyBalance(document.getElementById('reportDate').value, finalBalance);
+            }
+        }
+
+        // 日付ごとの最終残高をブラウザに保存（次の勤務日の前日繰越に使う）
+        const DAILY_BALANCE_KEY = 'nikkeihyou.dailyBalances';
+        const DAILY_BALANCE_KEEP = 60;
+
+        function loadDailyBalances() {
+            try {
+                return JSON.parse(localStorage.getItem(DAILY_BALANCE_KEY)) || {};
+            } catch (e) {
+                return {};
+            }
+        }
+
+        function saveDailyBalance(date, balance) {
+            if (!date) return;
+            const balances = loadDailyBalances();
+            balances[date] = balance;
+            const dates = Object.keys(balances).sort();
+            dates.slice(0, Math.max(0, dates.length - DAILY_BALANCE_KEEP)).forEach(d => delete balances[d]);
+            try {
+                localStorage.setItem(DAILY_BALANCE_KEY, JSON.stringify(balances));
+            } catch (e) {
+                // 保存できない環境では何もしない
+            }
+        }
+
+        // 指定日より前で最も新しい勤務日の残高を前日繰越に入力
+        function fillPreviousBalanceFromHistory(date) {
+            if (!date) return;
+            const balances = loadDailyBalances();
+            const prevDate = Object.keys(balances).filter(d => d < date).sort().pop();
+            if (prevDate === undefined) {
+                logDebug('前日繰越: 保存された前勤務日の残高なし');
+                return;
+            }
+            document.getElementById('previousBalance').value = balances[prevDate];
+            logDebug(`前日繰越: ${prevDate} の残高 ${balances[prevDate]} を自動入力`);
         }
 
         // 判定ボタンで残高チェック＆一致時にNotion自動送信
