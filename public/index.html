@@ -1631,7 +1631,8 @@
             const balances = loadDailyBalances();
             const prevDate = Object.keys(balances).filter(d => d < date).sort().pop();
             if (prevDate === undefined) {
-                logDebug('前日繰越: 保存された前勤務日の残高なし');
+                document.getElementById('previousBalance').value = '';
+                logDebug('前日繰越: 保存された前勤務日の残高なし → クリア');
                 return;
             }
             document.getElementById('previousBalance').value = balances[prevDate];
