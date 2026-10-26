@@ -1412,9 +1412,17 @@
         // 今日の日付を設定
         function setToday() {
             const today = new Date();
-            const dateString = today.toISOString().split('T')[0];
+            // toISOString()はUTCのため、日本時間の朝9時前だと前日になる → ローカル日付で組み立てる
+            const dateString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
             document.getElementById('reportDate').value = dateString;
+            handleReportDateChange();
+        }
+
+        // 日付が設定されたら、保存済みの前勤務日の残高を前日繰越に入れる
+        function handleReportDateChange() {
             updateDateDisplay();
+            fillPreviousBalanceFromHistory(document.getElementById('reportDate').value);
+            updateCalculations();
         }
 
         // 日付表示を更新
@@ -1444,7 +1452,7 @@
         }
 
         // 日付変更時
-        document.getElementById('reportDate').addEventListener('change', updateDateDisplay);
+        document.getElementById('reportDate').addEventListener('change', handleReportDateChange);
 
         // 印刷用符号表示を更新
         function updatePrintSigns() {
@@ -1959,6 +1967,7 @@
             balanceCheck.className = 'balance-check-inline';
 
             document.getElementById('confirmModal').classList.add('hidden');
+            fillPreviousBalanceFromHistory(document.getElementById('reportDate').value);
             updateCalculations();
             showMessage('全データをクリアしました。');
             logDebug('全データクリア完了');
