@@ -993,8 +993,8 @@
                     </thead>
                     <tbody>
                         <tr>
-                            <td>前日の繰越</td>
-                            <td><input type="number" class="input-field print-input-l" id="previousBalance" oninput="updateCalculations()"></td>
+                            <td>前日の繰越<div id="previousBalanceSource" class="no-print" style="font-size: 11px; color: #666;"></div></td>
+                            <td><input type="number" class="input-field print-input-l" id="previousBalance" oninput="setPreviousBalanceSource('手入力'); updateCalculations()"></td>
                         </tr>
                         <tr>
                             <td>本日の現金入金</td>
@@ -1632,11 +1632,20 @@
             const prevDate = Object.keys(balances).filter(d => d < date).sort().pop();
             if (prevDate === undefined) {
                 document.getElementById('previousBalance').value = '';
+                setPreviousBalanceSource('前勤務日のデータなし');
                 logDebug('前日繰越: 保存された前勤務日の残高なし → クリア');
                 return;
             }
             document.getElementById('previousBalance').value = balances[prevDate];
+            const d = new Date(`${prevDate}T00:00:00`);
+            const weekday = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
+            setPreviousBalanceSource(`${d.getMonth() + 1}/${d.getDate()}(${weekday})の残高`);
             logDebug(`前日繰越: ${prevDate} の残高 ${balances[prevDate]} を自動入力`);
+        }
+
+        // 前日繰越が何日の残高かを表示（印刷には出さない）
+        function setPreviousBalanceSource(text) {
+            document.getElementById('previousBalanceSource').textContent = text ? `（${text}）` : '';
         }
 
         // 判定ボタンで残高チェック＆一致時にNotion自動送信
