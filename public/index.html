@@ -1027,6 +1027,7 @@
         let selectedFile = null;
         window.notionPageId = null;
         window.notionAutoSent = false;
+        window.loadedReportDate = null;  // PDFを読み込んだ日付（この日だけ残高を保存する）
 
         // 初期化
         document.addEventListener('DOMContentLoaded', function() {
@@ -1185,7 +1186,7 @@
 
         // PDF読み込み前のクリア（金種表・出金表はユーザー入力なので保持）
         function clearFieldsBeforePdfLoad() {
-            const keepPattern = /^(bill|coin|stock|expense)/;
+            const keepPattern = /^(bill|coin|stock|expense|previousBalance$)/;
             const inputs = document.querySelectorAll('input[type="number"], input[type="text"]');
             inputs.forEach(input => {
                 if (input.id !== 'reportDate' && !keepPattern.test(input.id)) {
@@ -1381,13 +1382,18 @@
             }
 
             // 日付をセット
+            const dateBeforeLoad = document.getElementById('reportDate').value;
             if (data.date) {
                 document.getElementById('reportDate').value = data.date;
                 updateDateDisplay();
                 logDebug(`日付: ${data.date}`);
             }
+            window.loadedReportDate = document.getElementById('reportDate').value;
 
-            fillPreviousBalanceFromHistory(document.getElementById('reportDate').value);
+            // 日付が変わったときだけ前日繰越を入れ直す（同じ日なら手入力した繰越を残す）
+            if (window.loadedReportDate !== dateBeforeLoad) {
+                fillPreviousBalanceFromHistory(window.loadedReportDate);
+            }
 
             updatePrintSigns();
             updateCalculations();
@@ -1594,14 +1600,16 @@
             const finalBalance = previousBalance + incomeTotal - expenseTotal;
             document.getElementById('finalBalance').textContent = finalBalance;
 
-            // PDF読み込み済みの日だけ残高を保存（全クリア後の0で上書きしない）
-            if (window.notionPageId) {
-                saveDailyBalance(document.getElementById('reportDate').value, finalBalance);
+            // PDFを読み込んだ日付のときだけ残高を保存（日付を切り替えただけの日や全クリア後は保存しない）
+            // 金種が入力されていれば実際の現金（金種合計）を、なければ計算上の最終残高を繰り越す
+            const reportDate = document.getElementById('reportDate').value;
+            if (window.notionPageId && reportDate === window.loadedReportDate) {
+                saveDailyBalance(reportDate, totalBalance > 0 ? totalBalance : finalBalance);
             }
         }
 
         // 日付ごとの最終残高をブラウザに保存（次の勤務日の前日繰越に使う）
-        const DAILY_BALANCE_KEY = 'nikkeihyou.dailyBalances';
+        const DAILY_BALANCE_KEY = 'nikkeihyou.dailyBalances.v2';  // v1は誤保存を含むため破棄
         const DAILY_BALANCE_KEEP = 60;
 
         function loadDailyBalances() {
@@ -1951,6 +1959,7 @@
             selectedFile = null;
             window.notionPageId = null;
             window.notionAutoSent = false;
+            window.loadedReportDate = null;
             document.getElementById('uploadBtn').disabled = true;
             document.getElementById('fileStatus').textContent = 'PDFファイルを選択してください';
             document.getElementById('fileStatus').className = 'file-status';
